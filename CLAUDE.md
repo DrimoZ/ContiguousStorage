@@ -410,6 +410,18 @@ Tests minimum, chacun avec le contrôle inverse :
      `ASSIST`, elle ne coupe rien.
    - **Reste à faire :** mesurer le coût réel au profiler sur une base redstone (§12).
 6. **Registre des contrôleurs et filet.** Tests 5, 11.
+   **Fait** le 16 octobre 2026.
+   - **Le registre** contient des positions par dimension. Il se remplit par trois voies :
+     `ChunkEvent.Load`, qui ne lit que les positions des contrôleurs du chunk ; la pose d'un
+     contrôleur ; et tout contrôleur marqué par un voisin, ce qui couvre aussi un contrôleur posé par
+     commande ou par un autre mod. `ChunkEvent.Unload` le vide.
+   - **Le filet** tourne en `STRICT` à chaque `gameTime % validationIntervalTicks == 0`. Un contrôleur
+     dont le chunk n'est pas prêt est sauté sans être oublié ; un contrôleur disparu est oublié.
+   - **Tests :** le 5 vérifie qu'un `setBlock(…, AIR, 2)` reste invisible jusqu'au passage du filet,
+     puis se fait retirer. Le 11 vérifie qu'un mur de 50 tiroirs est parcouru une fois par passage,
+     jamais entre deux, et rien n'est retiré. Le test 11 tourne seul dans son batch, parce que
+     `Networks.validations` est un compteur global.
+   - Le serveur de game tests enchaîne les ticks sans attendre : 250 ticks prennent environ 2 s.
 7. **Linking Tool.** Test 7.
 8. **Config et tag.** Test 8.
 9. Docs publiques, page CurseForge, release.
