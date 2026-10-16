@@ -343,9 +343,12 @@ Tests minimum, chacun avec le contrôle inverse :
 3. `breakingTheMiddleOfAChainUnlinksTheFarSide` — et le côté proche reste lié.
 4. `anExplosionThatCutsTheChainUnlinks`.
 5. `aSilentSetBlockIsCaughtByTheSafetyNet` — `setBlock(pos, AIR, 2)` : rien pendant N−1 ticks, retiré à N.
-6. `anUnloadedPartOfTheChainUnlinksNothing` — **le test le plus important**. [à vérifier] comment
-   simuler un chunk non chargé en game test ; sinon, tester `NetworkWalker` directement avec un faux
-   accès aux chunks.
+6. `anUnloadedPartOfTheChainUnlinksNothing` — **le test le plus important**. **[vérifié]**
+   `GameTestHelper` n'a pas d'API de chunk : le test passe à `Networks.validate` un accès aux chunks
+   qui masque celui du **milieu d'une chaîne intacte**, et attend `ABORTED`. Le cas d'une chaîne
+   réellement coupée dont le bout est illisible n'est pas ce test. Le BFS s'arrête à la coupure, avant
+   le chunk illisible, et les tiroirs de ce chunk ne sont pas candidats : rien n'est retiré, mais le
+   résultat est `0`, pas `ABORTED`. La première version du test confondait les deux cas.
 7. `theLinkingToolCannotLinkAcrossAGap` (STRICT) ; en ASSIST, il le peut.
 8. `aConductorTagBlockCarriesTheNetwork` — et un bloc hors tag ne le fait pas.
 9. `aSecondControllerDoesNotStealOrBridge` — selon la décision de `DESIGN.md`.
@@ -369,6 +372,10 @@ Tests minimum, chacun avec le contrôle inverse :
    **Fait** le 16 octobre 2026 : chaîne, gap et diagonale, second contrôleur, portée, et chunk
    absent (test 6, au niveau du walker). Le tag des conducteurs est déjà lu, mais testé à l'étape 8.
 3. **Validation à la demande** : contrôleur marqué → BFS → `REMOVE` groupé. Tests 3, 4, 6.
+   **Fait** le 16 octobre 2026 : `Networks.validate`. Les candidats sont les tiroirs dont
+   `controllerPos` vaut ce contrôleur, lus dans les chunks **chargés** de l'AABB de portée. Un seul
+   `REMOVE` est envoyé. La méthode rend le nombre de tiroirs retirés, ou `ABORTED`. Le marquage arrive
+   avec le filet (étape 6) : pour l'instant, la méthode est appelée directement.
 4. **Auto-link à la pose.** Tests 1, 2, 9, 10.
 5. **Détection par `NeighborNotifyEvent`**, avec un coût mesuré : sortie immédiate en `OFF`.
 6. **Registre des contrôleurs et filet.** Tests 5, 11.

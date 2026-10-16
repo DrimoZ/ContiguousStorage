@@ -6,12 +6,14 @@ import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import com.buuz135.functionalstorage.item.LinkingToolItem;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.NetworkWalker;
+import dev.drimoz.contiguousstorage.network.Networks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -175,10 +177,105 @@ public final class CSGameTests {
 
     /** Walks with the real, non-blocking chunk access - minus the chunk holding {@code unloaded}, if given. */
     private static Set<BlockPos> walk(GameTestHelper helper, StorageControllerTile<?> controller, BlockPos unloaded) {
+        return NetworkWalker.walk(controller.getBlockPos(), NetworkWalker.range(controller), chunks(helper, unloaded));
+    }
+
+    private static LongFunction<LevelChunk> chunks(GameTestHelper helper, BlockPos unloaded) {
         LongFunction<LevelChunk> loaded = NetworkWalker.loadedChunks(helper.getLevel());
         long hidden = unloaded == null ? Long.MIN_VALUE : ChunkPos.asLong(unloaded);
-        return NetworkWalker.walk(controller.getBlockPos(), NetworkWalker.range(controller),
-                key -> key == hidden ? null : loaded.apply(key));
+        return key -> key == hidden ? null : loaded.apply(key);
+    }
+
+    // --- Validation on demand (CLAUDE.md §8, task 3) ------------------------------------------
+
+    /** Six drawers running east from {@link #EDGE_CONTROLLER}, all well inside its range. */
+    private static final List<BlockPos> CHAIN = IntStream.rangeClosed(1, 6).mapToObj(x -> new BlockPos(x, 1, 5)).toList();
+
+    /** Test 3. */
+    @GameTest(template = WALL)
+    public static void breakingTheMiddleOfAChainUnlinksTheFarSide(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeLinkedChain(helper);
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    helper.assertValueEqual(Networks.validate(helper.getLevel(), controller), 0,
+                            "drawers unlinked from an intact chain");
+                    helper.destroyBlock(CHAIN.get(2));
+                    helper.assertValueEqual(Networks.validate(helper.getLevel(), controller), 3,
+                            "drawers unlinked once the third one is broken");
+                    for (BlockPos pos : List.of(CHAIN.get(0), CHAIN.get(1))) {
+                        assertLinked(helper, controller, pos, true, "on the near side");
+                    }
+                    for (BlockPos pos : CHAIN.subList(3, 6)) {
+                        assertLinked(helper, controller, pos, false, "on the far side");
+                    }
+                })
+                .thenSucceed();
+    }
+
+    /** Test 4: whatever the blast leaves, a drawer stays linked exactly when it still touches the controller. */
+    @GameTest(template = WALL)
+    public static void anExplosionThatCutsTheChainUnlinks(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeLinkedChain(helper);
+        BlockPos blast = CHAIN.get(3);
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    Vec3 at = Vec3.atCenterOf(helper.absolutePos(blast));
+                    helper.getLevel().explode(null, at.x, at.y, at.z, 2.0F, Level.ExplosionInteraction.BLOCK);
+                    helper.assertFalse(isDrawer(helper, blast), "the explosion did not break the drawer it hit");
+                    helper.assertTrue(isDrawer(helper, CHAIN.get(5)),
+                            "the explosion left nothing beyond the gap, so this test proves nothing - make it smaller");
+
+                    helper.assertTrue(Networks.validate(helper.getLevel(), controller) > 0, "nothing was unlinked");
+                    boolean touching = true;
+                    for (BlockPos pos : CHAIN) {
+                        touching &= isDrawer(helper, pos);
+                        if (isDrawer(helper, pos)) {
+                            assertLinked(helper, controller, pos, touching, "after the explosion");
+                        }
+                    }
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Test 6, end to end: an intact chain whose middle cannot be read is not a broken chain. The
+     * result must be "no answer" - a walk that treated the missing chunk as a gap would unlink
+     * whatever lies beyond it in loaded chunks. (A chain that is really cut stops the walk at the cut,
+     * before any unreadable chunk, and its unreadable far end is simply not a candidate.)
+     */
+    @GameTest(template = WALL)
+    public static void anUnloadedPartOfTheChainUnlinksNothing(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeLinkedChain(helper);
+        BlockPos middle = helper.absolutePos(CHAIN.get(2));
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    helper.assertValueEqual(Networks.validate(controller, chunks(helper, middle)), Networks.ABORTED,
+                            "validation with the chunk holding the middle of the chain unavailable");
+                    for (BlockPos pos : CHAIN) {
+                        assertLinked(helper, controller, pos, true, "while part of the chain was unreadable");
+                    }
+                    helper.assertValueEqual(Networks.validate(helper.getLevel(), controller), 0,
+                            "control: drawers unlinked from the same intact chain once every chunk is readable");
+                })
+                .thenSucceed();
+    }
+
+    private static StorageControllerTile<?> placeLinkedChain(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        CHAIN.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD,
+                CHAIN.stream().map(helper::absolutePos).toArray(BlockPos[]::new));
+        return controller;
+    }
+
+    private static boolean isDrawer(GameTestHelper helper, BlockPos pos) {
+        return helper.getLevel().getBlockEntity(helper.absolutePos(pos)) instanceof ControllableDrawerTile<?>;
     }
 
     private static Set<BlockPos> absolute(GameTestHelper helper, List<BlockPos> relative) {
@@ -208,11 +305,16 @@ public final class CSGameTests {
     /** Both halves of a link must agree: the controller's list and the drawer's controllerPos. */
     private static void assertLinked(GameTestHelper helper, StorageControllerTile<?> controller,
                                      boolean expected, String when) {
-        BlockPos drawerAbs = helper.absolutePos(DRAWER);
-        ControllableDrawerTile<?> drawer = helper.getBlockEntity(DRAWER);
-        helper.assertValueEqual(inList(controller, drawerAbs), expected, "drawer in controller list " + when);
+        assertLinked(helper, controller, DRAWER, expected, when);
+    }
+
+    private static void assertLinked(GameTestHelper helper, StorageControllerTile<?> controller, BlockPos pos,
+                                     boolean expected, String when) {
+        BlockPos drawerAbs = helper.absolutePos(pos);
+        ControllableDrawerTile<?> drawer = helper.getBlockEntity(pos);
+        helper.assertValueEqual(inList(controller, drawerAbs), expected, "drawer " + pos + " in controller list " + when);
         helper.assertValueEqual(controller.getBlockPos().equals(drawer.getControllerPos()), expected,
-                "drawer controllerPos points at the controller " + when);
+                "drawer " + pos + " controllerPos points at the controller " + when);
     }
 
     private static boolean inList(StorageControllerTile<?> controller, BlockPos abs) {
