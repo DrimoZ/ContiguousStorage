@@ -248,7 +248,12 @@ O(1) (`getChunkNow`, puis `getBlockEntity` sur un chunk déjà en main).
   du tag `#<modid>:conductors`.
 - **Borne** : l'AABB de portée du contrôleur (`inflate(getStorageMultiplier())`), la même que FS. Le BFS
   ne peut pas exploser : il est borné par une boîte que FS borne déjà.
-- **Résultat** : l'ensemble des positions atteintes.
+- **Résultat** : l'ensemble des positions atteintes, ou `null` si un chunk manquait.
+
+**[vérifié]** Implémenté dans `network/NetworkWalker`. L'accès aux chunks est une
+`LongFunction<LevelChunk>` indexée par `ChunkPos.asLong`. En jeu, c'est `loadedChunks(level)`, donc
+`getChunkNow`. Dans le test 6, la même fonction masque un chunk. Le block entity se lit dans
+`chunk.getBlockEntities()`, une simple lecture de map, alors que `getBlockEntity` peut en créer un.
 
 Puis : chaque tiroir dont `controllerPos == ce contrôleur` et qui **n'est pas** atteint →
 `addConnectedDrawers(REMOVE, …)`, en un seul appel pour tous (un seul `rebuild()`).
@@ -354,13 +359,15 @@ Tests minimum, chacun avec le contrôle inverse :
 
 **Ne pas dévier de l'ordre. La tâche 1 conditionne l'architecture.**
 
-1. **[BLOQUANT] Spike, sous forme de game test.** Build qui compile contre FS 1.5.7, une classe `@Mod`
+1. **[BLOQUANT] Spike, sous forme de game test.** **Fait, réussi** (`SPIKE.md`). Build qui compile contre FS 1.5.7, une classe `@Mod`
    vide, et deux tests :
    - un `addConnectedDrawers(REMOVE, …)` survit à un déchargement puis rechargement de chunk (le tiroir
      ne se relie **pas** tout seul) ;
    - le chemin `onLoad` / `invalidateCapabilities` du **jar 1.5.7** se comporte comme lu au §3.
    *Si le premier échoue, s'arrêter : tout le mod repose sur un REMOVE qui tient.*
 2. **`NetworkWalker`** (BFS + règles de traversée + abandon sur chunk non chargé), testé seul.
+   **Fait** le 16 octobre 2026 : chaîne, gap et diagonale, second contrôleur, portée, et chunk
+   absent (test 6, au niveau du walker). Le tag des conducteurs est déjà lu, mais testé à l'étape 8.
 3. **Validation à la demande** : contrôleur marqué → BFS → `REMOVE` groupé. Tests 3, 4, 6.
 4. **Auto-link à la pose.** Tests 1, 2, 9, 10.
 5. **Détection par `NeighborNotifyEvent`**, avec un coût mesuré : sortie immédiate en `OFF`.

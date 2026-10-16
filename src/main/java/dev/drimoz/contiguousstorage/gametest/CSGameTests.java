@@ -5,18 +5,31 @@ import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import com.buuz135.functionalstorage.item.LinkingToolItem;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
+import dev.drimoz.contiguousstorage.network.NetworkWalker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.function.LongFunction;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 /**
- * The blocking spike of CLAUDE.md §8, task 1. The whole mod rests on one reading of Functional
+ * Game tests, in the order of CLAUDE.md §8. First, the blocking spike of task 1. The whole mod rests on one reading of Functional
  * Storage 1.5.7: a drawer that went through {@code addConnectedDrawers(REMOVE, …)} stays unlinked
  * when it is loaded again, because its {@code onLoad} only relinks a drawer that still has a
  * {@code controllerPos}.
@@ -97,12 +110,97 @@ public final class CSGameTests {
                 .thenSucceed();
     }
 
-    private static StorageControllerTile<?> placeLinkedPair(GameTestHelper helper) {
-        helper.setBlock(CONTROLLER, FunctionalStorage.DRAWER_CONTROLLER.getBlock());
-        helper.setBlock(DRAWER, FunctionalStorage.DRAWER_TYPES.get(FunctionalStorage.DrawerType.X_1).get(0).getBlock());
-        BlockEntity be = helper.getBlockEntity(CONTROLLER);
+    // --- NetworkWalker (CLAUDE.md §8, task 2) -------------------------------------------------
+
+    /** West edge of the wall, so a line of drawers can run east for the whole template. */
+    private static final BlockPos EDGE_CONTROLLER = new BlockPos(0, 1, 5);
+
+    @GameTest(template = WALL)
+    public static void theWalkerFollowsTheChainAndNothingElse(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        List<BlockPos> chain = List.of(new BlockPos(1, 1, 5), new BlockPos(2, 1, 5), new BlockPos(3, 1, 5));
+        chain.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        helper.setBlock(new BlockPos(5, 1, 5), drawerBlock()); // across a gap
+        helper.setBlock(new BlockPos(1, 2, 6), drawerBlock()); // diagonal to the chain
+
+        helper.assertValueEqual(walk(helper, controller, null), absolute(helper, chain),
+                "reached from the controller (the drawer across a gap and the diagonal one must not be)");
+        helper.succeed();
+    }
+
+    @GameTest(template = WALL)
+    public static void theWalkerStopsAtAnotherController(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        helper.setBlock(new BlockPos(1, 1, 5), drawerBlock());
+        placeController(helper, new BlockPos(2, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), drawerBlock());
+
+        helper.assertValueEqual(walk(helper, controller, null), absolute(helper, List.of(new BlockPos(1, 1, 5))),
+                "reached - a second controller must neither be traversed nor bridge to its drawers");
+        helper.succeed();
+    }
+
+    @GameTest(template = WALL)
+    public static void theWalkerStaysInsideTheControllerRange(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        List<BlockPos> line = IntStream.rangeClosed(1, 10).mapToObj(x -> new BlockPos(x, 1, 5)).toList();
+        line.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+
+        AABB range = NetworkWalker.range(controller);
+        Set<BlockPos> inRange = absolute(helper, line).stream()
+                .filter(pos -> range.contains(Vec3.atCenterOf(pos)))
+                .collect(Collectors.toSet());
+        helper.assertTrue(inRange.size() < line.size(),
+                "the whole line is in range, so this test proves nothing - make it longer");
+        helper.assertValueEqual(walk(helper, controller, null), inRange, "reached");
+        helper.succeed();
+    }
+
+    /**
+     * Test 6 of CLAUDE.md §7 at the walker's level: a chain running into a chunk that is not loaded
+     * gives no answer at all, rather than a short one. A short one would unlink the far side.
+     */
+    @GameTest(template = WALL)
+    public static void anUnloadedChunkOnTheChainAbortsTheWalk(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        List<BlockPos> chain = List.of(new BlockPos(1, 1, 5), new BlockPos(2, 1, 5), new BlockPos(3, 1, 5));
+        chain.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        BlockPos farEnd = helper.absolutePos(chain.get(2));
+
+        helper.assertTrue(walk(helper, controller, null) != null, "control: with every chunk loaded the walk answers");
+        helper.assertTrue(walk(helper, controller, farEnd) == null,
+                "the walk answered although the chunk holding the end of the chain was unavailable");
+        helper.succeed();
+    }
+
+    /** Walks with the real, non-blocking chunk access - minus the chunk holding {@code unloaded}, if given. */
+    private static Set<BlockPos> walk(GameTestHelper helper, StorageControllerTile<?> controller, BlockPos unloaded) {
+        LongFunction<LevelChunk> loaded = NetworkWalker.loadedChunks(helper.getLevel());
+        long hidden = unloaded == null ? Long.MIN_VALUE : ChunkPos.asLong(unloaded);
+        return NetworkWalker.walk(controller.getBlockPos(), NetworkWalker.range(controller),
+                key -> key == hidden ? null : loaded.apply(key));
+    }
+
+    private static Set<BlockPos> absolute(GameTestHelper helper, List<BlockPos> relative) {
+        return relative.stream().map(helper::absolutePos).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private static StorageControllerTile<?> placeController(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, FunctionalStorage.DRAWER_CONTROLLER.getBlock());
+        BlockEntity be = helper.getBlockEntity(pos);
         helper.assertTrue(be instanceof StorageControllerTile<?>, "no Storage Controller was placed");
-        StorageControllerTile<?> controller = (StorageControllerTile<?>) be;
+        return (StorageControllerTile<?>) be;
+    }
+
+    private static Block drawerBlock() {
+        return FunctionalStorage.DRAWER_TYPES.get(FunctionalStorage.DrawerType.X_1).get(0).getBlock();
+    }
+
+    // --- Shared ---------------------------------------------------------------------------------
+
+    private static StorageControllerTile<?> placeLinkedPair(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, CONTROLLER);
+        helper.setBlock(DRAWER, drawerBlock());
         controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, helper.absolutePos(DRAWER));
         return controller;
     }
