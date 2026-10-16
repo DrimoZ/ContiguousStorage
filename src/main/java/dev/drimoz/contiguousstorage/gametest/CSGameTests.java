@@ -4,17 +4,28 @@ import com.buuz135.functionalstorage.FunctionalStorage;
 import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import com.buuz135.functionalstorage.item.LinkingToolItem;
+import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.NetworkWalker;
 import dev.drimoz.contiguousstorage.network.Networks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.gametest.framework.AfterBatch;
+import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -264,6 +275,155 @@ public final class CSGameTests {
                             "control: drawers unlinked from the same intact chain once every chunk is readable");
                 })
                 .thenSucceed();
+    }
+
+    // --- Auto-link on placement (CLAUDE.md §8, task 4) ----------------------------------------
+    //
+    // Placed by a mock player through ItemStack.useOn, which is what fires EntityPlaceEvent -
+    // helper.setBlock does not. The mode is global config and game tests share one level, so each
+    // mode other than the default (ASSIST) gets a batch of its own, set before and restored after.
+
+    private static final String STRICT = "contiguousstorage_strict";
+    private static final String OFF = "contiguousstorage_off";
+
+    @BeforeBatch(batch = STRICT)
+    public static void strictMode(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.STRICT);
+    }
+
+    @BeforeBatch(batch = OFF)
+    public static void offMode(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.OFF);
+    }
+
+    @AfterBatch(batch = STRICT)
+    public static void restoreModeAfterStrict(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    @AfterBatch(batch = OFF)
+    public static void restoreModeAfterOff(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    /** Test 1, ASSIST. */
+    @GameTest(template = WALL)
+    public static void aDrawerPlacedAgainstTheControllerIsLinked(GameTestHelper helper) {
+        placedAgainstTheController(helper, true);
+    }
+
+    /** Test 1, STRICT. */
+    @GameTest(template = WALL, batch = STRICT)
+    public static void aDrawerPlacedAgainstTheControllerIsLinkedInStrict(GameTestHelper helper) {
+        placedAgainstTheController(helper, true);
+    }
+
+    /** Test 1, inverse: OFF is Functional Storage as shipped. */
+    @GameTest(template = WALL, batch = OFF)
+    public static void aDrawerPlacedAgainstTheControllerIsNotLinkedWhenOff(GameTestHelper helper) {
+        placedAgainstTheController(helper, false);
+    }
+
+    private static void placedAgainstTheController(GameTestHelper helper, boolean linked) {
+        StorageControllerTile<?> controller = placeController(helper, CONTROLLER);
+        placeAsPlayer(helper, drawerBlock(), DRAWER);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> assertLinked(helper, controller, DRAWER, linked, "after being placed against it in " + CSConfig.mode()))
+                .thenSucceed();
+    }
+
+    /** Test 2: three drawers away from the controller - and, inverse, not across a gap. */
+    @GameTest(template = WALL)
+    public static void aDrawerPlacedAgainstTheChainIsLinked(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        List<BlockPos> chain = CHAIN.subList(0, 3);
+        chain.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, chain.stream().map(helper::absolutePos).toArray(BlockPos[]::new));
+        BlockPos againstTheChain = CHAIN.get(3);
+        BlockPos acrossAGap = CHAIN.get(5);
+
+        placeAsPlayer(helper, drawerBlock(), againstTheChain);
+        placeAsPlayer(helper, drawerBlock(), acrossAGap);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, controller, againstTheChain, true, "placed against the end of the chain");
+                    assertLinked(helper, controller, acrossAGap, false, "placed one block away from the chain");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Test 9, first one wins: a second controller placed against a linked drawer takes nothing from
+     * the first, and each network grows only from what touches it.
+     */
+    @GameTest(template = WALL)
+    public static void aSecondControllerDoesNotStealOrBridge(GameTestHelper helper) {
+        StorageControllerTile<?> first = placeController(helper, EDGE_CONTROLLER);
+        BlockPos shared = new BlockPos(1, 1, 5);
+        helper.setBlock(shared, drawerBlock());
+        first.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, helper.absolutePos(shared));
+
+        BlockPos secondPos = new BlockPos(2, 1, 5);
+        BlockPos againstSecond = new BlockPos(3, 1, 5);
+        BlockPos againstShared = new BlockPos(1, 1, 6);
+        placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), secondPos);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, first, shared, true, "after a second controller was placed against it");
+                    placeAsPlayer(helper, drawerBlock(), againstSecond);
+                    placeAsPlayer(helper, drawerBlock(), againstShared);
+                })
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    StorageControllerTile<?> second = helper.getBlockEntity(secondPos);
+                    assertLinked(helper, second, againstSecond, true, "placed against the second controller only");
+                    assertLinked(helper, first, againstShared, true, "placed against the first controller's drawer");
+                    assertLinked(helper, first, shared, true, "at the end");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Test 10: a drawer from another mod that extends ControllableDrawerTile links and carries the
+     * network, with no line of code for it here. Needs Immaterial Drawers in the dev run (see
+     * build.gradle), hence not required.
+     */
+    @GameTest(template = WALL, required = false)
+    public static void anAddonDrawerConductsAndLinks(GameTestHelper helper) {
+        Block addonDrawer = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("immaterialdrawers", "energy_drawer"));
+        if (addonDrawer == Blocks.AIR) {
+            helper.fail("Immaterial Drawers is not in the run - build it next door to enable this test");
+        }
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        BlockPos addon = CHAIN.get(0);
+        BlockPos beyond = CHAIN.get(1);
+        placeAsPlayer(helper, addonDrawer, addon);
+        placeAsPlayer(helper, drawerBlock(), beyond);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, controller, addon, true, "the addon drawer, placed against the controller");
+                    assertLinked(helper, controller, beyond, true, "a drawer reached only through the addon drawer");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * What a player's right click does: {@code ItemStack.useOn}, through NeoForge's placement hook.
+     * The click lands on {@code pos} itself, which is cleared first so the block replaces it rather
+     * than going on top - the wall template's y = 1 layer is solid.
+     */
+    private static void placeAsPlayer(GameTestHelper helper, Block block, BlockPos pos) {
+        helper.setBlock(pos, Blocks.AIR);
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        ItemStack stack = new ItemStack(block);
+        // placeAt's UseOnContext reads the item from the player's hand, not from the stack it is given.
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        helper.placeAt(player, stack, pos.below(), Direction.UP);
+        helper.assertBlockPresent(block, pos);
     }
 
     private static StorageControllerTile<?> placeLinkedChain(GameTestHelper helper) {

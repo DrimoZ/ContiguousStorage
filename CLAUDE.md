@@ -377,6 +377,24 @@ Tests minimum, chacun avec le contrôle inverse :
    `REMOVE` est envoyé. La méthode rend le nombre de tiroirs retirés, ou `ABORTED`. Le marquage arrive
    avec le filet (étape 6) : pour l'instant, la méthode est appelée directement.
 4. **Auto-link à la pose.** Tests 1, 2, 9, 10.
+   **Fait** le 16 octobre 2026.
+   - `EntityPlaceEvent` met la position en file, et `LevelTickEvent.Post` appelle
+     `Networks.linkPlaced`. Pour chaque bloc posé, on cherche le contrôleur auquel il appartient : le
+     bloc lui-même ou un de ses 6 voisins, s'il est un contrôleur ou un tiroir lié à un contrôleur.
+     `linkFree` lance alors le BFS depuis ce contrôleur et relie **tous les tiroirs libres atteints**
+     en un seul `ADD`.
+   - Le même code couvre un tiroir posé, un contrôleur posé contre des tiroirs libres, et un tiroir
+     qui fait le pont vers une chaîne libre.
+   - La config `MODE` est arrivée avec cette étape, parce que le test 1 a besoin de `OFF`. Les tests
+     qui dépendent du mode tournent dans des batchs à eux (`@BeforeBatch` / `@AfterBatch`), puisque
+     la config est globale et que les tests partagent le level.
+   - **Pièges des game tests :** `helper.setBlock` n'émet pas `EntityPlaceEvent`, il faut poser par
+     un joueur simulé (`placeAt`). `placeAt` lit l'objet **dans la main** du joueur, pas la stack
+     passée en paramètre. La couche y=1 du template `wall` est pleine.
+   - Immaterial Drawers est chargé en `runtimeOnly` depuis `../ImmaterialDrawers/build/libs`, s'il y
+     est. Le test 10 est `required = false`.
+   - **Reste pour l'étape 8 :** un tiroir posé contre une chaîne de **conducteurs** ne trouve pas
+     encore son contrôleur, parce qu'un conducteur ne porte pas de `controllerPos`.
 5. **Détection par `NeighborNotifyEvent`**, avec un coût mesuré : sortie immédiate en `OFF`.
 6. **Registre des contrôleurs et filet.** Tests 5, 11.
 7. **Linking Tool.** Test 7.

@@ -68,6 +68,13 @@ dependencies {
     implementation "maven.modrinth:functional-storage:${functionalstorage_version}"
 
     runtimeOnly "maven.modrinth:jade:${jade_version}"
+
+    // Game test 10: an addon drawer conducts and links. Immaterial Drawers is built next door and
+    // not on a maven; without its jar the run still works and only that (non-required) test fails.
+    var immaterialDrawers = file("../ImmaterialDrawers/build/libs/immaterialdrawers-${immaterialdrawers_version}.jar")
+    if (immaterialDrawers.exists()) {
+        runtimeOnly files(immaterialDrawers)
+    }
 }
 
 // Expand gradle.properties into neoforge.mods.toml so versions live in one place.
