@@ -10,6 +10,9 @@ base { archivesName = mod_id }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Resources only (src/gametest/resources), merged into the mod in dev runs - see neoForge.mods.
+sourceSets { gametest {} }
+
 neoForge {
     version = project.neo_version
 
@@ -44,6 +47,9 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            // Dev runs only, never the jar: data the game tests need, such as a block in the
+            // conductor tag, which ships empty.
+            sourceSet(sourceSets.gametest)
         }
     }
 }

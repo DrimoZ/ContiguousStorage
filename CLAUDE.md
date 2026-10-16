@@ -433,6 +433,18 @@ Tests minimum, chacun avec le contrôle inverse :
      que le lien est défait en `STRICT` et maintenu en `ASSIST`.
    - **Non testé :** le contenu du message, car le joueur simulé ne le reçoit pas. À voir en jeu.
 8. **Config et tag.** Test 8.
+   **Fait** le 16 octobre 2026.
+   - **Config :** `mode` (arrivé à l'étape 4) et `validationIntervalTicks` (étape 6). Les deux
+     descriptions dans le toml disent ce qu'elles font, et `mode` avertit que `STRICT` coupe les liens
+     à distance.
+   - **Tag :** `#contiguousstorage:conductors` n'est pas livré, un tag absent vaut un tag vide. Les
+     game tests ont le leur dans `src/gametest/resources` (cuivre), un source set de ressources ajouté
+     au mod **dans les runs de dev seulement**. Le jar a été vérifié : le fichier n'y est pas.
+   - **Pose contre des conducteurs :** un conducteur ne porte pas de `controllerPos`, donc
+     `addOwners` remonte la file de conducteurs depuis le bloc posé, jusqu'à 512 blocs, pour trouver
+     le contrôleur au bout.
+   - **Limite :** casser un conducteur qui ne touche **aucun** tiroir ne marque rien, puisque
+     `neighborChanged` ne lit que des block entities. Le filet le rattrape au passage suivant.
 9. Docs publiques, page CurseForge, release.
 
 Avant la tâche 1, **proposer l'option en amont** (issue ou PR sur `Buuz135/FunctionalStorage`) : si

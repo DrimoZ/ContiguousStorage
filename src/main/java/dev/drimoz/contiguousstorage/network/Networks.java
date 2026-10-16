@@ -17,6 +17,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -170,10 +171,7 @@ public final class Networks {
             if (blockEntity(pos, chunks) instanceof StorageControllerTile<?>) {
                 known(level).add(pos);
             }
-            addOwner(pos, chunks, controllers);
-            for (Direction side : Direction.values()) {
-                addOwner(pos.relative(side), chunks, controllers);
-            }
+            addOwners(pos, chunks, controllers);
         }
         controllers.forEach(controller -> linkFree(controller, chunks));
     }
@@ -200,6 +198,41 @@ public final class Networks {
             controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, free.toArray(BlockPos[]::new));
         }
         return free.size();
+    }
+
+    /** How many conductor blocks {@link #addOwners} goes through before giving up. */
+    private static final int CONDUCTOR_SEARCH_LIMIT = 512;
+
+    /**
+     * The owners of {@code start} and of its neighbours - and, since a conductor carries no
+     * {@code controllerPos}, of everything along the conductor blocks it touches: a drawer placed at
+     * the end of a run of conductors finds the network at the other end.
+     */
+    private static void addOwners(BlockPos start, LongFunction<LevelChunk> chunks, Set<StorageControllerTile<?>> out) {
+        // ponytail: capped flood; a longer run of conductors waits for the safety net (STRICT) or
+        // for a drawer placed closer to the network (ASSIST).
+        Set<BlockPos> seen = new HashSet<>();
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        seen.add(start);
+        queue.add(start);
+        addOwner(start, chunks, out);
+        while (!queue.isEmpty() && seen.size() <= CONDUCTOR_SEARCH_LIMIT) {
+            BlockPos from = queue.poll();
+            for (Direction side : Direction.values()) {
+                BlockPos pos = from.relative(side);
+                if (seen.add(pos)) {
+                    addOwner(pos, chunks, out);
+                    if (isConductor(pos, chunks)) {
+                        queue.add(pos);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isConductor(BlockPos pos, LongFunction<LevelChunk> chunks) {
+        LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+        return chunk != null && chunk.getBlockState(pos).is(NetworkWalker.CONDUCTORS);
     }
 
     /** The controller at {@code pos}, or the one the drawer at {@code pos} is linked to, if loaded. */

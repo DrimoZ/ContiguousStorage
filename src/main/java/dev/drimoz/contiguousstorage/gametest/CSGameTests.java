@@ -545,6 +545,35 @@ public final class CSGameTests {
                 .thenSucceed();
     }
 
+    // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------
+
+    /**
+     * Test 8: a drawer placed at the end of a run of conductors - copper, in the test-only
+     * src/gametest tag - is linked; the same run in planks, out of the tag, carries nothing.
+     */
+    @GameTest(template = WALL)
+    public static void aConductorTagBlockCarriesTheNetwork(GameTestHelper helper) {
+        helper.assertTrue(Blocks.COPPER_BLOCK.defaultBlockState().is(NetworkWalker.CONDUCTORS),
+                "copper is not in #contiguousstorage:conductors - the src/gametest tag did not reach the run");
+        helper.assertFalse(Blocks.OAK_PLANKS.defaultBlockState().is(NetworkWalker.CONDUCTORS), "planks are a conductor");
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        helper.setBlock(new BlockPos(1, 1, 5), Blocks.COPPER_BLOCK);
+        helper.setBlock(new BlockPos(2, 1, 5), Blocks.COPPER_BLOCK);
+        helper.setBlock(new BlockPos(0, 1, 4), Blocks.OAK_PLANKS);
+        helper.setBlock(new BlockPos(0, 1, 3), Blocks.OAK_PLANKS);
+        BlockPos pastCopper = new BlockPos(3, 1, 5);
+        BlockPos pastPlanks = new BlockPos(0, 1, 2);
+        placeAsPlayer(helper, drawerBlock(), pastCopper);
+        placeAsPlayer(helper, drawerBlock(), pastPlanks);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, controller, pastCopper, true, "placed at the end of two conductor blocks");
+                    assertLinked(helper, controller, pastPlanks, false, "placed at the end of two planks");
+                })
+                .thenSucceed();
+    }
+
     // --- Linking Tool (CLAUDE.md §8, task 7) --------------------------------------------------
 
     /** Test 7, STRICT: the tool links across a gap, and the next tick undoes it. */
