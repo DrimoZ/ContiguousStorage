@@ -26,19 +26,30 @@ public final class CSEvents {
     /** Also receives {@code EntityMultiPlaceEvent}; its main position is enough for a drawer. */
     @SubscribeEvent
     public static void onPlace(BlockEvent.EntityPlaceEvent event) {
-        if (event.getLevel() instanceof ServerLevel level && CSConfig.mode() != CSConfig.Mode.OFF) {
-            Networks.placed(level, event.getPos());
+        if (event.getLevel() instanceof ServerLevel level) {
+            // Whatever the mode: a controller placed while OFF must be known if the world goes STRICT.
+            Networks.register(level, event.getPos());
+            if (CSConfig.mode() != CSConfig.Mode.OFF) {
+                Networks.placed(level, event.getPos());
+            }
         }
     }
 
     /**
-     * Runs on every block update of the server, and on the client too. Only STRICT ever unlinks, so
-     * every other case - OFF, ASSIST, the client - leaves at the first test.
+     * Runs on every block update of the server, and on the client too. OFF and the client leave at
+     * the first test. ASSIST only notes a controller set at that position (one map lookup), so that
+     * it is on the safety net if the world goes STRICT; only STRICT looks at the neighbours.
      */
     @SubscribeEvent
     public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
-        if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
+        CSConfig.Mode mode = CSConfig.mode();
+        if (mode == CSConfig.Mode.OFF || !(event.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        if (mode == CSConfig.Mode.STRICT) {
             Networks.neighborChanged(level, event.getPos());
+        } else {
+            Networks.register(level, event.getPos());
         }
     }
 

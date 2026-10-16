@@ -99,6 +99,17 @@ public final class Networks {
         }
     }
 
+    /**
+     * Puts the controller at {@code pos}, if there is one, on the safety net. Called whatever the
+     * mode for a placement, and in ASSIST for a block update: a controller that appeared while the
+     * world was not STRICT must be checked from the moment it is (found on a dedicated server).
+     */
+    public static void register(ServerLevel level, BlockPos pos) {
+        if (blockEntity(pos, NetworkWalker.loadedChunks(level)) instanceof StorageControllerTile<?>) {
+            known(level).add(pos.immutable());
+        }
+    }
+
     private static Set<BlockPos> known(ServerLevel level) {
         return KNOWN.computeIfAbsent(level.dimension(), key -> new HashSet<>());
     }
@@ -109,6 +120,7 @@ public final class Networks {
      * are already loaded, nothing else (CLAUDE.md §5).
      */
     public static void neighborChanged(ServerLevel level, BlockPos pos) {
+        register(level, pos);
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
         for (Direction side : Direction.values()) {
             BlockEntity be = blockEntity(pos.relative(side), chunks);

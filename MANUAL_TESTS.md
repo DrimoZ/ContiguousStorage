@@ -130,6 +130,60 @@ Passer `mode = "STRICT"`.
 
 ## Résultats
 
+### Campagne du 16 octobre 2026 — serveur dédié, piloté par Claude en RCON
+
+Ce qui a tourné :
+- un vrai serveur (`./gradlew runServer`), sur un monde plat ;
+- des chunks forcés et déforcés, et des redémarrages réels ;
+- un contrôle de l'état par `/data get block`, qui lit `controllerPos` sur le tiroir et
+  `connectedDrawers` sur le contrôleur.
+
+**Aucun joueur n'était connecté**, donc les liens ont été créés en posant chaque tiroir avec
+`controllerPos` en NBT. FS le relie alors tout seul dans son `onLoad`. Tout ce qui demande un client
+reste à faire à la main.
+
+| Section | Essai | Résultat | Notes |
+|---|---|---|---|
+| §1 | Casse au milieu en ASSIST | ✅ | Rien n'est délié, ni la chaîne ni le tiroir distant. |
+| §2 | Passage ASSIST → STRICT à chaud | ⚠️ | Le rechargement à chaud du toml marche. Mais un contrôleur posé par `/setblock` en ASSIST n'est **pas au registre** : rien n'est délié tant que son chunk n'est pas rechargé. Voir *Trouvé* ci-dessous. |
+| §2 | Monde existant redémarré en STRICT | ✅ | Démarrage en 0,7 s. Le bout de chaîne et le tiroir distant sont déliés au premier passage du filet, les deux premiers tiroirs restent reliés. |
+| §2 | `/setblock air` au milieu, STRICT | ✅ | Délié en moins de 0,4 s. |
+| §2 | TNT, STRICT | ✅ | À 5 blocs de la chaîne : 1003 et 1006 détruits ; 1001-1002 restent reliés, 1004-1005 et 1007-1008 sont déliés. À 6 blocs (contrôle) : rien de cassé, tout reste relié. À 3 blocs, la chaîne en chêne est entièrement détruite. |
+| §2 | Linking Tool, message | ⏳ | Demande un joueur. |
+| §3 | Déchargement réel puis rechargement, chaîne sur deux chunks | ✅ puis ❌ FS | Le premier cycle donne 8/8 reliés. Les deux suivants **bloquent le serveur** (watchdog, 60 s) dans `ControllableDrawerTile.invalidateCapabilities` de FS 1.5.7 (ligne 369), sans aucune frame de ce mod, et aussi en mode OFF. Voir *Trouvé*. |
+| §3 | Milieu déchargé, contrôleur chargé | ⏳ | Impossible sans joueur : un chunk voisin d'un chunk forcé reste chargé (niveau de ticket 32). Couvert par le game test 6. |
+| §4 | Cuivre ×3 (STRICT, filet actif) | ✅ | Reste relié. Planches ×2 : délié au passage du filet. |
+| §4 | Casse d'un cuivre qui ne touche aucun tiroir | ✅ | Filet à 72000 : toujours relié 3 s après. Filet remis à 100 : délié en moins de 7 s. |
+| §4 | Tag vide dans le jar livré | ⏳ | Demande une instance avec le jar. |
+| §5 | Client sans le mod, message de repli | ⏳ | Demande un client. |
+| §6 | Coût : 50 tiroirs et 100 observateurs en horloge | ✅ | Tick moyen de 0,7 ms en STRICT, 0,6 ms en OFF, 0,5 ms sans horloge (P99 : 2,8 / 4,0 / 2,4 ms). Les 50 tiroirs restent reliés après 25 s d'impulsions. |
+
+**Trouvé :**
+1. **Trou du registre (ce mod).** Un contrôleur créé autrement que par un joueur (commande, autre
+   mod) pendant qu'on n'est pas en STRICT n'entre au registre qu'au rechargement de son chunk. De
+   même, un contrôleur posé par un joueur en OFF n'est pas enregistré, puisque la pose n'est pas mise
+   en file en OFF. Après un passage à chaud en STRICT, le filet l'ignore donc jusqu'au prochain
+   chargement. Un redémarrage règle le problème.
+   **Corrigé le 17 octobre 2026**, avec deux game tests qui échouaient avant le correctif :
+   - une pose enregistre un contrôleur dans tous les modes ;
+   - en ASSIST, une mise à jour de bloc enregistre un contrôleur posé à cette position ;
+   - en STRICT, `neighborChanged` regarde aussi la position elle-même.
+
+   Reste un seul cas, assumé : un contrôleur posé par commande **en OFF**, où le listener sort au
+   premier test. Il entre au registre au rechargement de son chunk.
+2. **Deadlock de FS 1.5.7 (amont).** Un tiroir relié dans un autre chunk que son contrôleur peut
+   geler le serveur pendant que ses chunks se chargent. C'est reproduit 2 fois sur 3 cycles, et
+   également en OFF. La branche 1.21 de FS (1.5.8, pas encore publiée) corrige le problème avec
+   `getChunkNow`. Ce mod ne l'aggrave pas directement, mais l'auto-link relie facilement de grands
+   murs qui traversent des bordures de chunk. Le monde `run/cs-test` est conservé comme cas de
+   reproduction.
+
+**Outillage (pas le mod) :**
+- PowerShell 5.1 écrit l'UTF-8 avec un BOM, ce que nightconfig refuse : il recrée alors le toml avec
+  les valeurs par défaut.
+- `/setblock` refuse de remplacer un bloc identique, donc le NBT n'est pas appliqué.
+- `forceload remove all` a laissé un chunk forcé.
+
 | Date | Section | Résultat | Notes |
 |---|---|---|---|
 | | | | |

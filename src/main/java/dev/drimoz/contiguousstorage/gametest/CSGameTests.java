@@ -545,6 +545,63 @@ public final class CSGameTests {
                 .thenSucceed();
     }
 
+    // --- Registry across a live mode switch (found on the dedicated server, 17 October 2026) --
+
+    /** Each starts in a mode other than STRICT and switches to STRICT halfway, so each runs alone. */
+    private static final String SWITCH_FROM_ASSIST = "contiguousstorage_switch_assist";
+    private static final String SWITCH_FROM_OFF = "contiguousstorage_switch_off";
+
+    @BeforeBatch(batch = SWITCH_FROM_ASSIST)
+    public static void assistBeforeSwitch(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    @BeforeBatch(batch = SWITCH_FROM_OFF)
+    public static void offBeforeSwitch(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.OFF);
+    }
+
+    @AfterBatch(batch = SWITCH_FROM_ASSIST)
+    public static void restoreAfterSwitchFromAssist(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    @AfterBatch(batch = SWITCH_FROM_OFF)
+    public static void restoreAfterSwitchFromOff(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    /** A controller set by command in ASSIST must be on the safety net once the world goes STRICT. */
+    @GameTest(template = WALL, batch = SWITCH_FROM_ASSIST, timeoutTicks = 400)
+    public static void aControllerSetInAssistIsCheckedAfterSwitchingToStrict(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        distantLinkThenSwitchToStrict(helper, controller);
+    }
+
+    /** Same for a controller a player places while the mod is OFF. */
+    @GameTest(template = WALL, batch = SWITCH_FROM_OFF, timeoutTicks = 400)
+    public static void aControllerPlacedWhileOffIsCheckedAfterSwitchingToStrict(GameTestHelper helper) {
+        placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), EDGE_CONTROLLER);
+        distantLinkThenSwitchToStrict(helper, helper.getBlockEntity(EDGE_CONTROLLER));
+    }
+
+    private static void distantLinkThenSwitchToStrict(GameTestHelper helper, StorageControllerTile<?> controller) {
+        BlockPos distant = new BlockPos(3, 1, 5); // x = 1 and 2 stay andesite
+        helper.setBlock(distant, drawerBlock());
+        controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, helper.absolutePos(distant));
+        int interval = CSConfig.VALIDATION_INTERVAL_TICKS.get();
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, controller, distant, true, "linked at a distance in " + CSConfig.mode());
+                    CSConfig.MODE.set(CSConfig.Mode.STRICT);
+                })
+                .thenIdle(interval + 5)
+                .thenExecute(() -> assertLinked(helper, controller, distant, false,
+                        "a safety net pass after switching to STRICT - the controller is not in the registry"))
+                .thenSucceed();
+    }
+
     // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------
 
     /**
