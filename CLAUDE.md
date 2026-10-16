@@ -244,8 +244,12 @@ O(1) (`getChunkNow`, puis `getBlockEntity` sur un chunk déjà en main).
 
 À partir du contrôleur, parcours des 6 faces :
 
-- **Traverse** : tout `ControllableDrawerTile` **sauf** un autre `StorageControllerTile`, et tout bloc
-  du tag `#<modid>:conductors`.
+- **Traverse** : tout `ControllableDrawerTile` **libre ou déjà lié à ce contrôleur**, sauf un autre
+  `StorageControllerTile`, et tout bloc du tag `#contiguousstorage:conductors`.
+  **[vérifié]** Un tiroir lié à un **autre** contrôleur arrête aussi le parcours. Sans ça, un second
+  contrôleur traverse les tiroirs du premier et capte les tiroirs libres posés contre eux : un pont.
+  Le test 9 l'a trouvé à l'étape 5, une fois sur deux, selon l'ordre d'un `HashSet`. Il le vérifie
+  maintenant aussi de façon déterministe.
 - **Borne** : l'AABB de portée du contrôleur (`inflate(getStorageMultiplier())`), la même que FS. Le BFS
   ne peut pas exploser : il est borné par une boîte que FS borne déjà.
 - **Résultat** : l'ensemble des positions atteintes, ou `null` si un chunk manquait.
@@ -396,6 +400,15 @@ Tests minimum, chacun avec le contrôle inverse :
    - **Reste pour l'étape 8 :** un tiroir posé contre une chaîne de **conducteurs** ne trouve pas
      encore son contrôleur, parce qu'un conducteur ne porte pas de `controllerPos`.
 5. **Détection par `NeighborNotifyEvent`**, avec un coût mesuré : sortie immédiate en `OFF`.
+   **Fait** le 16 octobre 2026.
+   - Le listener sort au premier test sauf en `STRICT` côté serveur, puisque seul `STRICT` retire
+     quoi que ce soit. Cela couvre aussi `ASSIST` et le client.
+   - En `STRICT`, `Networks.neighborChanged` lit les 6 voisins dans la map des block entities des
+     chunks via `getChunkNow`, et marque leur contrôleur. `LevelTickEvent.Post` valide les
+     contrôleurs marqués.
+   - Tests : en `STRICT`, une casse au milieu d'une chaîne coupe le bout sans appel explicite ; en
+     `ASSIST`, elle ne coupe rien.
+   - **Reste à faire :** mesurer le coût réel au profiler sur une base redstone (§12).
 6. **Registre des contrôleurs et filet.** Tests 5, 11.
 7. **Linking Tool.** Test 7.
 8. **Config et tag.** Test 8.

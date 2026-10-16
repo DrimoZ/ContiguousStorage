@@ -24,10 +24,24 @@ public final class CSEvents {
         }
     }
 
+    /**
+     * Runs on every block update of the server, and on the client too. Only STRICT ever unlinks, so
+     * every other case - OFF, ASSIST, the client - leaves at the first test.
+     */
+    @SubscribeEvent
+    public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
+        if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
+            Networks.neighborChanged(level, event.getPos());
+        }
+    }
+
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
             Networks.linkPlaced(level);
+            if (CSConfig.mode() == CSConfig.Mode.STRICT) {
+                Networks.validateDirty(level);
+            }
         }
     }
 }

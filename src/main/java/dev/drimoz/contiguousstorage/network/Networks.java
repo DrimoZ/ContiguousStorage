@@ -39,7 +39,46 @@ public final class Networks {
      */
     private static final Map<ResourceKey<Level>, Set<BlockPos>> PLACED = new HashMap<>();
 
+    /** Controllers to validate at the end of this tick, per dimension. STRICT only. */
+    private static final Map<ResourceKey<Level>, Set<BlockPos>> DIRTY = new HashMap<>();
+
     private Networks() {
+    }
+
+    /**
+     * A block changed at {@code pos}: the controller of every neighbour that is a controller or a
+     * linked drawer must be checked again. The hot path of the mod - six map lookups in chunks that
+     * are already loaded, nothing else (CLAUDE.md §5).
+     */
+    public static void neighborChanged(ServerLevel level, BlockPos pos) {
+        LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
+        for (Direction side : Direction.values()) {
+            BlockEntity be = blockEntity(pos.relative(side), chunks);
+            BlockPos controller = be instanceof StorageControllerTile<?> ? be.getBlockPos()
+                    : be instanceof ControllableDrawerTile<?> drawer ? drawer.getControllerPos()
+                    : null;
+            if (controller != null) {
+                markDirty(level, controller);
+            }
+        }
+    }
+
+    public static void markDirty(ServerLevel level, BlockPos controller) {
+        DIRTY.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(controller.immutable());
+    }
+
+    /** Validates every controller marked since the last tick, if it is still there and loaded. */
+    public static void validateDirty(ServerLevel level) {
+        Set<BlockPos> dirty = DIRTY.remove(level.dimension());
+        if (dirty == null) {
+            return;
+        }
+        LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
+        for (BlockPos pos : dirty) {
+            if (blockEntity(pos, chunks) instanceof StorageControllerTile<?> controller) {
+                validate(controller, chunks);
+            }
+        }
     }
 
     public static void placed(ServerLevel level, BlockPos pos) {

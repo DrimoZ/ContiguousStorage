@@ -382,6 +382,15 @@ public final class CSGameTests {
                     assertLinked(helper, second, againstSecond, true, "placed against the second controller only");
                     assertLinked(helper, first, againstShared, true, "placed against the first controller's drawer");
                     assertLinked(helper, first, shared, true, "at the end");
+
+                    // The same bridge, without depending on which controller the tick handles first:
+                    // a free drawer against the first one's drawer is out of the second one's reach.
+                    BlockPos free = new BlockPos(1, 1, 4);
+                    helper.setBlock(free, drawerBlock());
+                    helper.assertValueEqual(Networks.linkFree(second, chunks(helper, null)), 0,
+                            "drawers the second controller linked through the first one's drawer");
+                    ControllableDrawerTile<?> freeDrawer = helper.getBlockEntity(free);
+                    helper.assertTrue(freeDrawer.getControllerPos() == null, "the free drawer was linked across");
                 })
                 .thenSucceed();
     }
@@ -407,6 +416,37 @@ public final class CSGameTests {
                 .thenExecute(() -> {
                     assertLinked(helper, controller, addon, true, "the addon drawer, placed against the controller");
                     assertLinked(helper, controller, beyond, true, "a drawer reached only through the addon drawer");
+                })
+                .thenSucceed();
+    }
+
+    // --- Detection by NeighborNotifyEvent (CLAUDE.md §8, task 5) ------------------------------
+
+    /** Test 3 again, with nobody calling validate: the block update of the break is enough. */
+    @GameTest(template = WALL, batch = STRICT)
+    public static void inStrictBreakingTheMiddleOfAChainUnlinksTheFarSideByItself(GameTestHelper helper) {
+        breakTheMiddleAndLook(helper, false);
+    }
+
+    /** Inverse: ASSIST never unlinks. */
+    @GameTest(template = WALL)
+    public static void inAssistBreakingTheMiddleOfAChainUnlinksNothing(GameTestHelper helper) {
+        breakTheMiddleAndLook(helper, true);
+    }
+
+    private static void breakTheMiddleAndLook(GameTestHelper helper, boolean farSideLinked) {
+        StorageControllerTile<?> controller = placeLinkedChain(helper);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> helper.destroyBlock(CHAIN.get(2)))
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    for (BlockPos pos : CHAIN.subList(0, 2)) {
+                        assertLinked(helper, controller, pos, true, "on the near side in " + CSConfig.mode());
+                    }
+                    for (BlockPos pos : CHAIN.subList(3, 6)) {
+                        assertLinked(helper, controller, pos, farSideLinked, "on the far side in " + CSConfig.mode());
+                    }
                 })
                 .thenSucceed();
     }

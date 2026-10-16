@@ -59,7 +59,7 @@ public final class NetworkWalker {
                 if (chunk == null) {
                     return null;
                 }
-                if (conducts(chunk, pos)) {
+                if (conducts(chunk, pos, controllerPos)) {
                     reached.add(pos);
                     queue.add(pos);
                 }
@@ -82,14 +82,17 @@ public final class NetworkWalker {
     }
 
     /**
-     * Any linkable drawer except another controller (first one wins, DESIGN.md §4), or a block in
-     * the conductor tag. The block entity is read from the chunk's map: a plain lookup, where
-     * {@code getBlockEntity} could create one.
+     * A drawer that is free or already ours, or a block in the conductor tag. Another controller,
+     * and a drawer linked to another controller, stop the walk: first one wins (DESIGN.md §4), and
+     * without that a second controller would reach through the first one's drawers and take the
+     * free drawers placed against them. The block entity is read from the chunk's map: a plain
+     * lookup, where {@code getBlockEntity} could create one.
      */
-    private static boolean conducts(LevelChunk chunk, BlockPos pos) {
+    private static boolean conducts(LevelChunk chunk, BlockPos pos, BlockPos controllerPos) {
         BlockEntity be = chunk.getBlockEntities().get(pos);
-        if (be instanceof ControllableDrawerTile<?>) {
-            return !(be instanceof StorageControllerTile<?>);
+        if (be instanceof ControllableDrawerTile<?> drawer) {
+            BlockPos owner = drawer.getControllerPos();
+            return !(be instanceof StorageControllerTile<?>) && (owner == null || owner.equals(controllerPos));
         }
         return chunk.getBlockState(pos).is(CONDUCTORS);
     }
