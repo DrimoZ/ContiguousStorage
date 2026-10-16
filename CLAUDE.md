@@ -423,6 +423,15 @@ Tests minimum, chacun avec le contrôle inverse :
      `Networks.validations` est un compteur global.
    - Le serveur de game tests enchaîne les ticks sans attendre : 250 ticks prennent environ 2 s.
 7. **Linking Tool.** Test 7.
+   **Fait** le 16 octobre 2026, avec l'option « laisser faire puis corriger ».
+   - En `STRICT`, `RightClickBlock` (côté serveur, Linking Tool en main) lit
+     `stack.get(FSAttachments.CONTROLLER)` et marque ce contrôleur avec le joueur. Le tick suivant
+     valide le contrôleur et envoie au joueur, en barre d'action, « N drawer(s) not touching… »
+     (`translatableWithFallback`). Le même code couvre les modes simple et zone.
+   - Le test simule ce que fait `ServerPlayerGameMode.useItemOn` : l'événement, puis
+     `ItemStack.useOn`. Il vérifie que FS a bien relié le tiroir (sinon il ne prouverait rien), puis
+     que le lien est défait en `STRICT` et maintenu en `ASSIST`.
+   - **Non testé :** le contenu du message, car le joueur simulé ne le reçoit pas. À voir en jeu.
 8. **Config et tag.** Test 8.
 9. Docs publiques, page CurseForge, release.
 

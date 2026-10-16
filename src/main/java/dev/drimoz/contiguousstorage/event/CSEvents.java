@@ -1,10 +1,15 @@
 package dev.drimoz.contiguousstorage.event;
 
+import com.buuz135.functionalstorage.FunctionalStorage;
+import com.buuz135.functionalstorage.item.FSAttachments;
 import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.Networks;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -34,6 +39,23 @@ public final class CSEvents {
     public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
         if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
             Networks.neighborChanged(level, event.getPos());
+        }
+    }
+
+    /**
+     * The Linking Tool calls {@code addConnectedDrawers} directly; nothing comes out of it. In
+     * STRICT, let it link, then validate its controller at the next tick and tell the player what
+     * was undone - one path for both its single and its area mode (DESIGN.md §4). Fires before
+     * {@code useOn}, on both sides.
+     */
+    @SubscribeEvent
+    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
+            ItemStack stack = event.getItemStack();
+            BlockPos controller = stack.is(FunctionalStorage.LINKING_TOOL.get()) ? stack.get(FSAttachments.CONTROLLER) : null;
+            if (controller != null) {
+                Networks.markDirty(level, controller, event.getEntity());
+            }
         }
     }
 

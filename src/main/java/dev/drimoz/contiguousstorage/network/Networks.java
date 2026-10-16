@@ -6,6 +6,8 @@ import com.buuz135.functionalstorage.item.LinkingToolItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -41,7 +43,7 @@ public final class Networks {
     private static final Map<ResourceKey<Level>, Set<BlockPos>> PLACED = new HashMap<>();
 
     /** Controllers to validate at the end of this tick, per dimension. STRICT only. */
-    private static final Map<ResourceKey<Level>, Set<BlockPos>> DIRTY = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Map<BlockPos, Player>> DIRTY = new HashMap<>();
 
     /**
      * Controllers in loaded chunks, per dimension, for the safety net - FS keeps no such list, and a
@@ -119,23 +121,34 @@ public final class Networks {
     }
 
     public static void markDirty(ServerLevel level, BlockPos controller) {
-        DIRTY.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(controller.immutable());
+        DIRTY.computeIfAbsent(level.dimension(), key -> new HashMap<>()).putIfAbsent(controller.immutable(), null);
+    }
+
+    /** Same, and {@code player} is told how many drawers the validation unlinks - the Linking Tool. */
+    public static void markDirty(ServerLevel level, BlockPos controller, Player player) {
+        DIRTY.computeIfAbsent(level.dimension(), key -> new HashMap<>()).put(controller.immutable(), player);
     }
 
     /** Validates every controller marked since the last tick, if it is still there and loaded. */
     public static void validateDirty(ServerLevel level) {
-        Set<BlockPos> dirty = DIRTY.remove(level.dimension());
+        Map<BlockPos, Player> dirty = DIRTY.remove(level.dimension());
         if (dirty == null) {
             return;
         }
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
-        for (BlockPos pos : dirty) {
+        dirty.forEach((pos, player) -> {
             if (blockEntity(pos, chunks) instanceof StorageControllerTile<?> controller) {
                 // Also how a controller set by command or by another mod joins the safety net.
                 known(level).add(pos);
-                validate(controller, chunks);
+                int unlinked = validate(controller, chunks);
+                if (unlinked > 0 && player != null) {
+                    // With a fallback: the mod is server-side only, a client without it has no lang file.
+                    player.displayClientMessage(Component.translatableWithFallback(
+                            "message.contiguousstorage.not_connected",
+                            "%s drawer(s) not touching the controller's network were not linked", unlinked), true);
+                }
             }
-        }
+        });
     }
 
     public static void placed(ServerLevel level, BlockPos pos) {

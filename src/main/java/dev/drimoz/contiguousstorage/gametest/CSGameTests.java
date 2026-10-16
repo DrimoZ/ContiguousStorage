@@ -3,6 +3,7 @@ package dev.drimoz.contiguousstorage.gametest;
 import com.buuz135.functionalstorage.FunctionalStorage;
 import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
+import com.buuz135.functionalstorage.item.FSAttachments;
 import com.buuz135.functionalstorage.item.LinkingToolItem;
 import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
@@ -21,6 +22,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -538,6 +543,48 @@ public final class CSGameTests {
                     wall.forEach(pos -> assertLinked(helper, controller, pos, true, "after idling"));
                 })
                 .thenSucceed();
+    }
+
+    // --- Linking Tool (CLAUDE.md §8, task 7) --------------------------------------------------
+
+    /** Test 7, STRICT: the tool links across a gap, and the next tick undoes it. */
+    @GameTest(template = WALL, batch = STRICT)
+    public static void theLinkingToolCannotLinkAcrossAGap(GameTestHelper helper) {
+        linkAcrossAGap(helper, false);
+    }
+
+    /** Test 7, inverse: in ASSIST the tool still links at a distance. */
+    @GameTest(template = WALL)
+    public static void inAssistTheLinkingToolLinksAcrossAGap(GameTestHelper helper) {
+        linkAcrossAGap(helper, true);
+    }
+
+    private static void linkAcrossAGap(GameTestHelper helper, boolean staysLinked) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        // x = 1 and 2 stay as the template's andesite: in range, not touching.
+        BlockPos distant = new BlockPos(3, 1, 5);
+        helper.setBlock(distant, drawerBlock());
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    useLinkingTool(helper, EDGE_CONTROLLER, distant);
+                    assertLinked(helper, controller, distant, true, "right after the Linking Tool - FS did not link it, so this test proves nothing");
+                })
+                .thenIdle(2)
+                .thenExecute(() -> assertLinked(helper, controller, distant, staysLinked, "a tick after the Linking Tool in " + CSConfig.mode()))
+                .thenSucceed();
+    }
+
+    /** What {@code ServerPlayerGameMode.useItemOn} does with a Linking Tool: the event, then the item. */
+    private static void useLinkingTool(GameTestHelper helper, BlockPos controller, BlockPos target) {
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        ItemStack tool = new ItemStack(FunctionalStorage.LINKING_TOOL.get());
+        tool.set(FSAttachments.CONTROLLER, helper.absolutePos(controller));
+        player.setItemInHand(InteractionHand.MAIN_HAND, tool);
+        BlockPos abs = helper.absolutePos(target);
+        BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(abs), Direction.UP, abs, false);
+        NeoForge.EVENT_BUS.post(new PlayerInteractEvent.RightClickBlock(player, InteractionHand.MAIN_HAND, abs, hit));
+        tool.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
     }
 
     /**
