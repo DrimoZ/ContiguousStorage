@@ -1,0 +1,43 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "${mod_license}"
+issueTrackerURL = "https://github.com/DrimoZ/ContiguousStorage/issues"
+
+# Server-side only: no blocks, no items, no network payloads, so a client without the mod can join.
+# There is no displayTest key in FML 21.1 (checked, see SPIKE.md).
+[[mods]]
+modId = "${mod_id}"
+version = "${mod_version}"
+displayName = "${mod_name}"
+authors = "${mod_authors}"
+displayURL = "https://github.com/DrimoZ/ContiguousStorage"
+description = '''${mod_description}'''
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neo_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+# The mod only ever talks to Functional Storage's linking API (addConnectedDrawers, controllerPos).
+[[dependencies.${mod_id}]]
+modId = "functionalstorage"
+type = "required"
+versionRange = "[1.5.7,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "titanium"
+type = "required"
+versionRange = "[4.0.34,)"
+ordering = "AFTER"
+side = "BOTH"
