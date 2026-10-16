@@ -16,6 +16,7 @@ public final class CSConfig {
 
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.EnumValue<Mode> MODE;
+    public static final ModConfigSpec.IntValue VALIDATION_INTERVAL_TICKS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -27,6 +28,11 @@ public final class CSConfig {
                         "        WARNING: switching an existing world to STRICT unlinks every drawer that was linked at a",
                         "        distance with the Linking Tool. It is the only setting that undoes a player's work.")
                 .defineEnum("mode", Mode.ASSIST);
+        VALIDATION_INTERVAL_TICKS = builder
+                .comment("STRICT only. Every this many ticks, every loaded controller is checked again, whatever the",
+                        "block updates missed (a mod that sets blocks without notifying neighbours, for instance).",
+                        "It bounds how long a drawer can stay wrongly linked. 0 disables it - not recommended.")
+                .defineInRange("validationIntervalTicks", 100, 0, 72000);
         SPEC = builder.build();
     }
 

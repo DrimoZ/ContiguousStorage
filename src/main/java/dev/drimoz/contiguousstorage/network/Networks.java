@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,61 @@ public final class Networks {
     /** Controllers to validate at the end of this tick, per dimension. STRICT only. */
     private static final Map<ResourceKey<Level>, Set<BlockPos>> DIRTY = new HashMap<>();
 
+    /**
+     * Controllers in loaded chunks, per dimension, for the safety net - FS keeps no such list, and a
+     * controller's tile cannot be ticked from here. Positions, not tiles: a tile can be replaced.
+     */
+    private static final Map<ResourceKey<Level>, Set<BlockPos>> KNOWN = new HashMap<>();
+
+    /** How many times {@link #validate} has walked a network. Read by game test 11; nothing else. */
+    public static long validations;
+
     private Networks() {
+    }
+
+    public static void chunkLoaded(ServerLevel level, LevelChunk chunk) {
+        for (BlockEntity be : chunk.getBlockEntities().values()) {
+            if (be instanceof StorageControllerTile<?>) {
+                known(level).add(be.getBlockPos().immutable());
+            }
+        }
+    }
+
+    public static void chunkUnloaded(ServerLevel level, LevelChunk chunk) {
+        Set<BlockPos> known = KNOWN.get(level.dimension());
+        if (known != null) {
+            ChunkPos unloaded = chunk.getPos();
+            known.removeIf(pos -> new ChunkPos(pos).equals(unloaded));
+        }
+    }
+
+    /**
+     * The safety net: every {@code interval} ticks, every known controller is validated, whatever
+     * the events missed. A controller whose chunk is not ready is skipped, not forgotten; one that is
+     * gone is forgotten.
+     */
+    public static void safetyNet(ServerLevel level, int interval) {
+        Set<BlockPos> known = KNOWN.get(level.dimension());
+        if (interval <= 0 || known == null || level.getGameTime() % interval != 0) {
+            return;
+        }
+        LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
+        for (Iterator<BlockPos> it = known.iterator(); it.hasNext(); ) {
+            BlockPos pos = it.next();
+            LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+            if (chunk == null) {
+                continue;
+            }
+            if (chunk.getBlockEntities().get(pos) instanceof StorageControllerTile<?> controller) {
+                validate(controller, chunks);
+            } else {
+                it.remove();
+            }
+        }
+    }
+
+    private static Set<BlockPos> known(ServerLevel level) {
+        return KNOWN.computeIfAbsent(level.dimension(), key -> new HashSet<>());
     }
 
     /**
@@ -76,6 +131,8 @@ public final class Networks {
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
         for (BlockPos pos : dirty) {
             if (blockEntity(pos, chunks) instanceof StorageControllerTile<?> controller) {
+                // Also how a controller set by command or by another mod joins the safety net.
+                known(level).add(pos);
                 validate(controller, chunks);
             }
         }
@@ -97,6 +154,9 @@ public final class Networks {
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
         Set<StorageControllerTile<?>> controllers = new LinkedHashSet<>();
         for (BlockPos pos : placed) {
+            if (blockEntity(pos, chunks) instanceof StorageControllerTile<?>) {
+                known(level).add(pos);
+            }
             addOwner(pos, chunks, controllers);
             for (Direction side : Direction.values()) {
                 addOwner(pos.relative(side), chunks, controllers);
@@ -162,6 +222,7 @@ public final class Networks {
     public static int validate(StorageControllerTile<?> controller, LongFunction<LevelChunk> chunks) {
         BlockPos controllerPos = controller.getBlockPos();
         AABB range = NetworkWalker.range(controller);
+        validations++;
         Set<BlockPos> connected = NetworkWalker.walk(controllerPos, range, chunks);
         if (connected == null) {
             return ABORTED;

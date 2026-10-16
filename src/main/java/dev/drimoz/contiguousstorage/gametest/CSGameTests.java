@@ -451,6 +451,95 @@ public final class CSGameTests {
                 .thenSucceed();
     }
 
+    // --- Controller registry and safety net (CLAUDE.md §8, task 6) ----------------------------
+
+    /** Test 11 counts every validation on the server, so it runs alone. */
+    private static final String STRICT_ALONE = "contiguousstorage_strict_alone";
+
+    @BeforeBatch(batch = STRICT_ALONE)
+    public static void strictModeAlone(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.STRICT);
+    }
+
+    @AfterBatch(batch = STRICT_ALONE)
+    public static void restoreModeAfterStrictAlone(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    /**
+     * Test 5: {@code setBlock(pos, AIR, 2)} - no neighbour update, so no event sees the cut. Nothing
+     * happens until the safety net's next pass, which unlinks the far side. The controller is placed
+     * by a player, which is how it joins the registry, and auto-links the chain already there.
+     */
+    @GameTest(template = WALL, batch = STRICT, timeoutTicks = 400)
+    public static void aSilentSetBlockIsCaughtByTheSafetyNet(GameTestHelper helper) {
+        int interval = CSConfig.VALIDATION_INTERVAL_TICKS.get();
+        CHAIN.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), EDGE_CONTROLLER);
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    CHAIN.forEach(pos -> assertLinked(helper, controller, pos, true, "after the controller was placed against the chain"));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(helper.getLevel().getGameTime() % interval == 1,
+                        "waiting for the tick after a safety net pass"))
+                .thenExecute(() -> helper.getLevel().setBlock(helper.absolutePos(CHAIN.get(2)), Blocks.AIR.defaultBlockState(), 2))
+                .thenIdle(interval - 4)
+                .thenExecute(() -> {
+                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    for (BlockPos pos : CHAIN.subList(3, 6)) {
+                        assertLinked(helper, controller, pos, true, "before the safety net's next pass - something else saw the silent cut");
+                    }
+                })
+                .thenIdle(5)
+                .thenExecute(() -> {
+                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    for (BlockPos pos : CHAIN.subList(0, 2)) {
+                        assertLinked(helper, controller, pos, true, "on the near side after the safety net");
+                    }
+                    for (BlockPos pos : CHAIN.subList(3, 6)) {
+                        assertLinked(helper, controller, pos, false, "on the far side after the safety net");
+                    }
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Test 11, the counterpart of Immaterial Drawers' anti-rebuild test: fifty drawers sitting still
+     * are walked once per safety net pass, and never in between - and never unlinked.
+     */
+    @GameTest(template = WALL, batch = STRICT_ALONE, timeoutTicks = 400)
+    public static void aWallOfDrawersDoesNotRevalidateEveryTick(GameTestHelper helper) {
+        int interval = CSConfig.VALIDATION_INTERVAL_TICKS.get();
+        int idle = interval * 5 / 2;
+        // Rows x = 0..3 whole, then x = 4 up to the controller's z: fifty drawers, all touching.
+        List<BlockPos> wall = IntStream.range(0, 50).mapToObj(i -> new BlockPos(i / 11, 1, i % 11)).toList();
+        wall.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), CONTROLLER);
+        long[] before = new long[1];
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
+                    wall.forEach(pos -> assertLinked(helper, controller, pos, true, "once the wall has settled"));
+                    before[0] = Networks.validations;
+                })
+                .thenIdle(idle)
+                .thenExecute(() -> {
+                    long walks = Networks.validations - before[0];
+                    helper.assertTrue(walks >= idle / interval,
+                            walks + " validations in " + idle + " ticks - the safety net never ran, so this test proves nothing");
+                    helper.assertTrue(walks <= idle / interval + 1,
+                            walks + " validations in " + idle + " ticks with nothing happening - expected one per safety net pass");
+                    StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
+                    wall.forEach(pos -> assertLinked(helper, controller, pos, true, "after idling"));
+                })
+                .thenSucceed();
+    }
+
     /**
      * What a player's right click does: {@code ItemStack.useOn}, through NeoForge's placement hook.
      * The click lands on {@code pos} itself, which is cleared first so the block replaces it rather

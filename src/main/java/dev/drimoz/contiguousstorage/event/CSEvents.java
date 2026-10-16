@@ -4,9 +4,11 @@ import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.Networks;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /** Every listener of the mod, on the game bus (CLAUDE.md §5). */
@@ -41,7 +43,26 @@ public final class CSEvents {
             Networks.linkPlaced(level);
             if (CSConfig.mode() == CSConfig.Mode.STRICT) {
                 Networks.validateDirty(level);
+                Networks.safetyNet(level, CSConfig.VALIDATION_INTERVAL_TICKS.get());
             }
+        }
+    }
+
+    /**
+     * Server thread, before the chunk is necessarily FULL: only the positions of its controllers
+     * are read, nothing else is asked of the level (CLAUDE.md §5).
+     */
+    @SubscribeEvent
+    public static void onChunkLoad(ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel level && event.getChunk() instanceof LevelChunk chunk) {
+            Networks.chunkLoaded(level, chunk);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onChunkUnload(ChunkEvent.Unload event) {
+        if (event.getLevel() instanceof ServerLevel level && event.getChunk() instanceof LevelChunk chunk) {
+            Networks.chunkUnloaded(level, chunk);
         }
     }
 }
