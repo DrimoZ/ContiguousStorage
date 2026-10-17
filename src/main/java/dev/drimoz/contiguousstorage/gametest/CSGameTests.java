@@ -33,6 +33,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -599,6 +600,47 @@ public final class CSGameTests {
                 .thenIdle(interval + 5)
                 .thenExecute(() -> assertLinked(helper, controller, distant, false,
                         "a safety net pass after switching to STRICT - the controller is not in the registry"))
+                .thenSucceed();
+    }
+
+    // --- Access control on auto-link (CLAUDE.md §8, task 9) -----------------------------------
+
+    /** Moves the world border, which every other test would feel, so it runs alone. */
+    private static final String BORDER = "contiguousstorage_border";
+
+    @AfterBatch(batch = BORDER)
+    public static void restoreWorldBorder(ServerLevel level) {
+        level.getWorldBorder().setCenter(0, 0);
+        level.getWorldBorder().setSize(WorldBorder.MAX_SIZE);
+    }
+
+    /**
+     * Test 12: a drawer placed against a controller its placer may not interact with is not linked.
+     * {@code Level.mayInteract} is spawn protection and the world border; spawn protection is off on a
+     * game test server, so the border stands in: it runs between the controller (outside) and the
+     * drawer (inside). Inverse, in the same test: a controller inside the border links its drawer.
+     */
+    @GameTest(template = WALL, batch = BORDER)
+    public static void aDrawerPlacedByAnOutsiderIsNotLinked(GameTestHelper helper) {
+        StorageControllerTile<?> forbidden = placeController(helper, EDGE_CONTROLLER);
+        StorageControllerTile<?> allowed = placeController(helper, CONTROLLER);
+        BlockPos againstForbidden = new BlockPos(1, 1, 5);
+        BlockPos againstAllowed = DRAWER;
+        BlockPos edge = helper.absolutePos(EDGE_CONTROLLER);
+        // West edge half a block east of the forbidden controller: x = 0 is out, x >= 1 is in.
+        helper.getLevel().getWorldBorder().setCenter(edge.getX() + 0.5 + 100, edge.getZ());
+        helper.getLevel().getWorldBorder().setSize(200);
+        helper.assertFalse(helper.getLevel().mayInteract(helper.makeMockPlayer(GameType.CREATIVE), forbidden.getBlockPos()),
+                "the border does not shut out the first controller, so this test proves nothing");
+
+        placeAsPlayer(helper, drawerBlock(), againstForbidden);
+        placeAsPlayer(helper, drawerBlock(), againstAllowed);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, forbidden, againstForbidden, false, "placed against a controller its placer may not interact with");
+                    assertLinked(helper, allowed, againstAllowed, true, "placed against a controller its placer may interact with");
+                })
                 .thenSucceed();
     }
 

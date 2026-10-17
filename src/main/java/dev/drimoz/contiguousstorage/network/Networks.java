@@ -39,9 +39,9 @@ public final class Networks {
     /**
      * Positions where something was placed this tick, per dimension. Linking waits for the tick:
      * {@code EntityPlaceEvent} fires while block snapshots are captured, and another mod may still
-     * cancel the placement (CLAUDE.md §5).
+     * cancel the placement (CLAUDE.md §5). The value is who placed it, null for anything but a player.
      */
-    private static final Map<ResourceKey<Level>, Set<BlockPos>> PLACED = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Map<BlockPos, Player>> PLACED = new HashMap<>();
 
     /** Controllers to validate at the end of this tick, per dimension. STRICT only. */
     private static final Map<ResourceKey<Level>, Map<BlockPos, Player>> DIRTY = new HashMap<>();
@@ -164,27 +164,35 @@ public final class Networks {
         });
     }
 
-    public static void placed(ServerLevel level, BlockPos pos) {
-        PLACED.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
+    public static void placed(ServerLevel level, BlockPos pos, @Nullable Player player) {
+        PLACED.computeIfAbsent(level.dimension(), key -> new HashMap<>()).put(pos.immutable(), player);
     }
 
     /**
      * Auto-link for everything placed since the last tick: each controller that the placed block is,
      * or touches directly or through one of its drawers, links the free drawers it now reaches.
+     *
+     * <p>Only for a controller the placer may interact with (IDEAS.md §4): without that, a drawer
+     * set against someone else's wall would join their network and take what it stores - the
+     * Linking Tool at least needs a click on the controller first. A placement by anything but a
+     * player links nothing.
      */
     public static void linkPlaced(ServerLevel level) {
-        Set<BlockPos> placed = PLACED.remove(level.dimension());
+        Map<BlockPos, Player> placed = PLACED.remove(level.dimension());
         if (placed == null) {
             return;
         }
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
         Set<StorageControllerTile<?>> controllers = new LinkedHashSet<>();
-        for (BlockPos pos : placed) {
-            if (blockEntity(pos, chunks) instanceof StorageControllerTile<?>) {
-                known(level).add(pos);
+        placed.forEach((pos, player) -> {
+            if (player == null) {
+                return;
             }
-            addOwners(pos, chunks, controllers);
-        }
+            Set<StorageControllerTile<?>> owners = new LinkedHashSet<>();
+            addOwners(pos, chunks, owners);
+            owners.removeIf(controller -> !level.mayInteract(player, controller.getBlockPos()));
+            controllers.addAll(owners);
+        });
         controllers.forEach(controller -> linkFree(controller, chunks));
     }
 

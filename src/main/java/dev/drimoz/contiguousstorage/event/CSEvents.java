@@ -7,6 +7,7 @@ import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.Networks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -30,7 +31,7 @@ public final class CSEvents {
             // Whatever the mode: a controller placed while OFF must be known if the world goes STRICT.
             Networks.register(level, event.getPos());
             if (CSConfig.mode() != CSConfig.Mode.OFF) {
-                Networks.placed(level, event.getPos());
+                Networks.placed(level, event.getPos(), event.getEntity() instanceof Player player ? player : null);
             }
         }
     }
