@@ -26,6 +26,9 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
+import net.minecraft.network.chat.Component;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -40,8 +43,10 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 import java.util.Set;
 import java.util.function.LongFunction;
 import java.util.stream.Collectors;
@@ -642,6 +647,102 @@ public final class CSGameTests {
                     assertLinked(helper, allowed, againstAllowed, true, "placed against a controller its placer may interact with");
                 })
                 .thenSucceed();
+    }
+
+    // --- Cut feedback (CLAUDE.md §8, task 10) -------------------------------------------------
+
+    /** Counts particles across the server, so it runs alone. */
+    private static final String STRICT_CUT = "contiguousstorage_strict_cut";
+
+    @BeforeBatch(batch = STRICT_CUT)
+    public static void strictModeForCut(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.STRICT);
+    }
+
+    @AfterBatch(batch = STRICT_CUT)
+    public static void restoreModeAfterCut(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    /**
+     * Test 13: the player who cuts a chain is told how many drawers it cut off, in the English
+     * fallback a client without the mod gets, and each of them gets particles. Then a cut of 120
+     * drawers: the count is still right, and the particles stop at the cap.
+     */
+    @GameTest(template = WALL, batch = STRICT_CUT, timeoutTicks = 200)
+    public static void aCutReportsTheDisconnectedDrawers(GameTestHelper helper) {
+        // A chain of six along the top layer, clear of the slab below.
+        BlockPos smallController = new BlockPos(0, 4, 0);
+        List<BlockPos> chain = IntStream.rangeClosed(1, 6).mapToObj(x -> new BlockPos(x, 4, 0)).toList();
+        StorageControllerTile<?> small = placeController(helper, smallController);
+        chain.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        small.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, chain.stream().map(helper::absolutePos).toArray(BlockPos[]::new));
+
+        // A full 11 x 11 slab on y = 2, touching the controller below it at one drawer only.
+        StorageControllerTile<?> big = placeController(helper, CONTROLLER);
+        List<BlockPos> slab = IntStream.range(0, 121).mapToObj(i -> new BlockPos(i / 11, 2, i % 11)).toList();
+        slab.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        big.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, slab.stream().map(helper::absolutePos).toArray(BlockPos[]::new));
+        BlockPos slabJoint = CONTROLLER.above();
+
+        ListeningPlayer player = new ListeningPlayer(helper.getLevel());
+        long[] before = new long[1];
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    before[0] = Networks.particlesSent;
+                    breakAsPlayer(helper, chain.get(2), player);
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    chain.subList(3, 6).forEach(pos -> assertLinked(helper, small, pos, false, "past the cut"));
+                    helper.assertValueEqual(player.messages, List.of("3 drawer(s) disconnected"), "messages to the player who cut");
+                    helper.assertValueEqual(Networks.particlesSent - before[0], 3L, "drawers given particles for a cut of 3");
+                    player.messages.clear();
+                    before[0] = Networks.particlesSent;
+                    breakAsPlayer(helper, slabJoint, player);
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    slab.stream().filter(pos -> !pos.equals(slabJoint))
+                            .forEach(pos -> assertLinked(helper, big, pos, false, "in the slab cut off"));
+                    helper.assertValueEqual(player.messages, List.of("120 drawer(s) disconnected"), "messages to the player who cut");
+                    helper.assertValueEqual(Networks.particlesSent - before[0], (long) Networks.PARTICLE_CAP,
+                            "drawers given particles for a cut of 120");
+                })
+                .thenSucceed();
+    }
+
+    /** What {@code ServerPlayerGameMode.destroyBlock} does: the event, then the break. */
+    private static void breakAsPlayer(GameTestHelper helper, BlockPos pos, Player player) {
+        BlockPos abs = helper.absolutePos(pos);
+        NeoForge.EVENT_BUS.post(new BlockEvent.BreakEvent(helper.getLevel(), abs, helper.getLevel().getBlockState(abs), player));
+        helper.destroyBlock(pos);
+    }
+
+    /** A player that keeps what the action bar would have shown, as plain text. */
+    private static final class ListeningPlayer extends Player {
+
+        final List<String> messages = new ArrayList<>();
+
+        ListeningPlayer(Level level) {
+            super(level, BlockPos.ZERO, 0.0F, new GameProfile(UUID.randomUUID(), "test-listening-player"));
+        }
+
+        @Override
+        public boolean isSpectator() {
+            return false;
+        }
+
+        @Override
+        public boolean isCreative() {
+            return false;
+        }
+
+        @Override
+        public void displayClientMessage(Component message, boolean actionBar) {
+            messages.add(message.getString());
+        }
     }
 
     // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------

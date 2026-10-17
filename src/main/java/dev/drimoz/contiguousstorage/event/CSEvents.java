@@ -55,6 +55,18 @@ public final class CSEvents {
     }
 
     /**
+     * Fires before the block goes, player only. In STRICT, the controllers it belongs to or touches
+     * are checked at the next tick, and the player is told how many drawers the break cut off. A
+     * break another mod cancels afterwards only costs a validation that finds nothing.
+     */
+    @SubscribeEvent
+    public static void onBreak(BlockEvent.BreakEvent event) {
+        if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
+            Networks.broken(level, event.getPos(), event.getPlayer());
+        }
+    }
+
+    /**
      * The Linking Tool calls {@code addConnectedDrawers} directly; nothing comes out of it. In
      * STRICT, let it link, then validate its controller at the next tick and tell the player what
      * was undone - one path for both its single and its area mode (DESIGN.md §4). Fires before
@@ -66,7 +78,7 @@ public final class CSEvents {
             ItemStack stack = event.getItemStack();
             BlockPos controller = stack.is(FunctionalStorage.LINKING_TOOL.get()) ? stack.get(FSAttachments.CONTROLLER) : null;
             if (controller != null) {
-                Networks.markDirty(level, controller, event.getEntity());
+                Networks.linkingToolUsed(level, controller, event.getEntity());
             }
         }
     }
