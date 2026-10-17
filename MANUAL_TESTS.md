@@ -177,6 +177,13 @@ reste à faire à la main.
    `getChunkNow`. Ce mod ne l'aggrave pas directement, mais l'auto-link relie facilement de grands
    murs qui traversent des bordures de chunk. Le monde `run/cs-test` est conservé comme cas de
    reproduction.
+   **Contourné le 17 octobre 2026** par un mixin qui reporte le correctif de la branche 1.21 de FS
+   (`mixin/ControllableDrawerTileMixin`, appliqué à FS ≤ 1.5.7) :
+   - même monde `cs-test` : **0 gel** sur 3 démarrages et 5 vrais cycles de déchargement et
+     rechargement, avec 8/8 tiroirs reliés à chaque cycle ;
+   - sans le correctif, le même monde avait gelé 2 fois sur 3 ;
+   - 4 autres cycles n'ont pas déchargé le chunk à temps et ne comptent pas ;
+   - le contrôle sans mixin date d'avant, pas de la même session.
 
 **Outillage (pas le mod) :**
 - PowerShell 5.1 écrit l'UTF-8 avec un BOM, ce que nightconfig refuse : il recrée alors le toml avec

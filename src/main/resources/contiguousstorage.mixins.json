@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.drimoz.contiguousstorage.mixin",
+  "plugin": "dev.drimoz.contiguousstorage.mixin.CSMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ControllableDrawerTileMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -41,3 +41,8 @@ type = "required"
 versionRange = "[4.0.34,)"
 ordering = "AFTER"
 side = "BOTH"
+
+# One backport of a Functional Storage fix, applied to FS 1.5.7 and older only - see
+# mixin/ControllableDrawerTileMixin and DESIGN.md §3.
+[[mixins]]
+config = "contiguousstorage.mixins.json"
