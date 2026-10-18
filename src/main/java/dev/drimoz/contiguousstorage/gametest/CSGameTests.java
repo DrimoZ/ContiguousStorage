@@ -9,8 +9,12 @@ import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.NetworkWalker;
 import dev.drimoz.contiguousstorage.network.Networks;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
@@ -743,6 +747,64 @@ public final class CSGameTests {
         public void displayClientMessage(Component message, boolean actionBar) {
             messages.add(message.getString());
         }
+    }
+
+    // --- Dry run (CLAUDE.md §8, task 11) ------------------------------------------------------
+
+    /**
+     * Test 14, in ASSIST: a cut chain is counted as STRICT would unlink it, and stays linked. The
+     * count is taken on this test's controller only - other tests leave controllers in the level -
+     * then the command itself runs through the dispatcher, to prove it is registered and answers.
+     */
+    @GameTest(template = WALL)
+    public static void dryrunCountsWithoutRemoving(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeLinkedChain(helper);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> helper.destroyBlock(CHAIN.get(2)))
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    Networks.DryRun result = Networks.dryRun(helper.getLevel(), List.of(controller.getBlockPos()));
+                    helper.assertValueEqual(result, new Networks.DryRun(1, 0, 3), "dry run of a chain cut after its second drawer");
+                    for (BlockPos pos : CHAIN.subList(3, 6)) {
+                        assertLinked(helper, controller, pos, true, "after the dry run");
+                    }
+
+                    List<String> replies = new ArrayList<>();
+                    helper.getLevel().getServer().getCommands().performPrefixedCommand(listeningSource(helper, replies),
+                            "/contiguousstorage dryrun");
+                    helper.assertTrue(replies.size() == 1 && replies.get(0).contains("STRICT would unlink"),
+                            "reply to /contiguousstorage dryrun: " + replies);
+                })
+                .thenSucceed();
+    }
+
+    /** An operator-level command source that keeps what it is told, as plain text. */
+    private static CommandSourceStack listeningSource(GameTestHelper helper, List<String> replies) {
+        CommandSource listener = new CommandSource() {
+            @Override
+            public void sendSystemMessage(Component message) {
+                replies.add(message.getString());
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
+        return new CommandSourceStack(listener, Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO)), Vec2.ZERO,
+                helper.getLevel(), Commands.LEVEL_OWNERS, "contiguousstorage-test", Component.literal("test"),
+                helper.getLevel().getServer(), null);
     }
 
     // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------

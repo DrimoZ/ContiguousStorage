@@ -21,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -379,6 +380,53 @@ public final class Networks {
             }
         }
         return stray;
+    }
+
+    // --- Dry run ---------------------------------------------------------------------------------
+
+    /**
+     * What STRICT would do on a set of controllers, without doing it.
+     *
+     * @param checked controllers whose whole network could be read
+     * @param skipped controllers not readable now: their chunk, or part of their network, is not loaded
+     * @param strays  drawers STRICT would unlink from the checked controllers
+     */
+    public record DryRun(int checked, int skipped, int strays) {
+    }
+
+    /** {@link #dryRun(ServerLevel, Collection)} on every controller the registry knows in this dimension. */
+    public static DryRun dryRun(ServerLevel level) {
+        return dryRun(level, List.copyOf(KNOWN.getOrDefault(level.dimension(), Set.of())));
+    }
+
+    /**
+     * Counts what STRICT would unlink, in any mode, and unlinks nothing (IDEAS.md A1): what a pack
+     * runs before switching an existing world to STRICT. A position that no longer holds a controller
+     * is ignored.
+     */
+    public static DryRun dryRun(ServerLevel level, Collection<BlockPos> controllers) {
+        LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
+        int checked = 0;
+        int skipped = 0;
+        int strays = 0;
+        for (BlockPos pos : controllers) {
+            LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+            if (chunk == null) {
+                skipped++;
+                continue;
+            }
+            if (!(chunk.getBlockEntities().get(pos) instanceof StorageControllerTile<?> controller)) {
+                continue;
+            }
+            List<BlockPos> found = strays(controller, chunks);
+            if (found == null) {
+                skipped++;
+            } else {
+                checked++;
+                strays += found.size();
+            }
+        }
+        return new DryRun(checked, skipped, strays);
     }
 
     /** One puff per drawer, at most {@link #PARTICLE_CAP} drawers. */

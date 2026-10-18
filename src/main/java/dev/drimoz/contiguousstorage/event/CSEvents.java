@@ -5,7 +5,10 @@ import com.buuz135.functionalstorage.item.FSAttachments;
 import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.Networks;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -81,6 +84,25 @@ public final class CSEvents {
                 Networks.linkingToolUsed(level, controller, event.getEntity());
             }
         }
+    }
+
+    /**
+     * {@code /contiguousstorage dryrun}: what STRICT would unlink in this dimension, in any mode,
+     * without unlinking anything. Brigadier runs server-side, so it works from a vanilla client.
+     */
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        event.getDispatcher().register(Commands.literal(ContiguousStorage.MOD_ID)
+                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .then(Commands.literal("dryrun").executes(context -> {
+                    Networks.DryRun result = Networks.dryRun(context.getSource().getLevel());
+                    context.getSource().sendSuccess(() -> Component.translatableWithFallback(
+                            "commands.contiguousstorage.dryrun",
+                            "%s controller(s) checked, %s skipped (part of their network is not loaded): "
+                                    + "STRICT would unlink %s drawer(s). Nothing was changed.",
+                            result.checked(), result.skipped(), result.strays()), false);
+                    return result.strays();
+                })));
     }
 
     @SubscribeEvent
