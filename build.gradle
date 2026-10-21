@@ -41,6 +41,11 @@ neoForge {
                 programArguments.addAll '--quickPlaySingleplayer', 'scenario'
                 systemProperty 'contiguousstorage.scenario', 'true'
             }
+            // -Plogo: renders the logo from the real blocks into run/logo/logo.png (LogoRender).
+            if (project.hasProperty('logo')) {
+                programArguments.addAll '--quickPlaySingleplayer', 'scenario'
+                systemProperty 'contiguousstorage.logo', 'true'
+            }
         }
         // A client with Functional Storage but not this mod, joining runServer: it must be turned
         // away cleanly, since the trims are registered (MANUAL_TESTS.md).
