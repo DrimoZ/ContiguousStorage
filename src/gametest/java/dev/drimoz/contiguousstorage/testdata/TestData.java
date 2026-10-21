@@ -16,5 +16,8 @@ public final class TestData {
         if (FMLEnvironment.dist == Dist.CLIENT && Boolean.getBoolean("contiguousstorage.logo")) {
             NeoForge.EVENT_BUS.register(new LogoRender());
         }
+        if (FMLEnvironment.dist == Dist.CLIENT && Boolean.getBoolean("contiguousstorage.showcase")) {
+            NeoForge.EVENT_BUS.register(new Showcase());
+        }
     }
 }

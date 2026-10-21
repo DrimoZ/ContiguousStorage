@@ -46,6 +46,11 @@ neoForge {
                 programArguments.addAll '--quickPlaySingleplayer', 'scenario'
                 systemProperty 'contiguousstorage.logo', 'true'
             }
+            // -Pshowcase: builds the store page's scenes and captures them into run/store-screenshots (Showcase).
+            if (project.hasProperty('showcase')) {
+                programArguments.addAll '--quickPlaySingleplayer', 'scenario', '--width', '1920', '--height', '1080'
+                systemProperty 'contiguousstorage.showcase', 'true'
+            }
         }
         // A client with Functional Storage but not this mod, joining runServer: it must be turned
         // away cleanly, since the trims are registered (MANUAL_TESTS.md).
