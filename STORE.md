@@ -13,6 +13,27 @@ reference. Anything that changes goes into `README.md` first, then here.
 - **License:** MIT for the code; the logo is All Rights Reserved
 - **Source / issues:** https://github.com/DrimoZ/ContiguousStorage
 
+## Publishing 0.1.0+1.21.1
+
+Checked on 21 October 2026:
+- the slug `contiguous-storage` is free on Modrinth and on CurseForge (both answer 404);
+- the 36 required game tests pass, and so do the in-game scenario (67/0, 13/0) and the client
+  without the mod (`MANUAL_TESTS.md`).
+
+Still to do, by hand, since each step publishes something:
+1. **GitHub.** Create `DrimoZ/ContiguousStorage`: `neoforge.mods.toml` links to it for the
+   homepage and the issue tracker. The branch for 1.21.1 is `main` (the local branch is still
+   `master`). Push, then tag `v0.1.0+1.21.1`.
+2. **Changelog.** Replace "unreleased" with the release date in `CHANGELOG.md`, then
+   `./gradlew build`.
+3. **File:** `build/libs/contiguousstorage-0.1.0+1.21.1.jar`. Minecraft 1.21.1, NeoForge, client
+   and server.
+4. **Dependencies:** Functional Storage and Titanium, both required. Nothing else.
+5. **Page:** the description below, with the logo `logo/logo.png`. The changelog is the
+   0.1.0 section of `CHANGELOG.md`.
+6. **Screenshots:** none yet. The dev captures in `run/screenshots` are 854×480 with the HUD showing,
+   too poor for a store page.
+
 ---
 
 ## Description

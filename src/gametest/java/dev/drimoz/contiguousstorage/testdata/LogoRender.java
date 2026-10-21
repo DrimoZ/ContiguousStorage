@@ -193,18 +193,13 @@ public final class LogoRender {
         seam(g, screen(toScreen, 1, 1.14f, 1), screen(toScreen, 1, 1.86f, 1));
         seam(g, screen(toScreen, 0.14f, 1, 1), screen(toScreen, 0.86f, 1, 1));
         seam(g, screen(toScreen, 1.14f, 1, 1), screen(toScreen, 1.86f, 1, 1));
-        // The gap: a red badge with a white cross, between the wall and the drawer that does not touch.
-        float[] c = screen(toScreen, 2.5f, 0.4f, 0.4f);
-        int r = 56;
-        g.setColor(Color.WHITE);
-        g.fillOval(Math.round(c[0]) - r - 9, Math.round(c[1]) - r - 9, 2 * r + 18, 2 * r + 18);
-        g.setColor(new Color(214, 48, 49));
-        g.fillOval(Math.round(c[0]) - r, Math.round(c[1]) - r, 2 * r, 2 * r);
-        g.setColor(Color.WHITE);
-        g.setStroke(new BasicStroke(18, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        int k = 25;
-        g.drawLine(Math.round(c[0]) - k, Math.round(c[1]) - k, Math.round(c[0]) + k, Math.round(c[1]) + k);
-        g.drawLine(Math.round(c[0]) - k, Math.round(c[1]) + k, Math.round(c[0]) + k, Math.round(c[1]) - k);
+        // The gap: the seams' glow in red, as a cross - linked is teal, not linked is red.
+        float[] c = screen(toScreen, 2.4f, 0.5f, 0.5f);
+        int k = 38;
+        Color red = new Color(255, 82, 82);
+        Color core = new Color(255, 200, 200);
+        seam(g, new float[]{c[0] - k, c[1] - k}, new float[]{c[0] + k, c[1] + k}, red, core);
+        seam(g, new float[]{c[0] - k, c[1] + k}, new float[]{c[0] + k, c[1] - k}, red, core);
         g.dispose();
 
         BufferedImage out = new BufferedImage(OUT, OUT, BufferedImage.TYPE_INT_ARGB);
@@ -218,14 +213,18 @@ public final class LogoRender {
         ImageIO.write(out, "png", dir.resolve("logo.png").toFile());
     }
 
-    /** A glowing line: three soft strokes under a bright core. */
     private static void seam(Graphics2D g, float[] a, float[] b) {
+        seam(g, a, b, new Color(95, 227, 210), new Color(190, 255, 246));
+    }
+
+    /** A glowing line: three soft strokes of {@code glow} under a {@code core} line. */
+    private static void seam(Graphics2D g, float[] a, float[] b, Color glow, Color core) {
         for (int[] layer : new int[][]{{34, 40}, {24, 70}, {16, 120}}) {
-            g.setColor(new Color(95, 227, 210, layer[1]));
+            g.setColor(new Color(glow.getRed(), glow.getGreen(), glow.getBlue(), layer[1]));
             g.setStroke(new BasicStroke(layer[0], BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g.drawLine(Math.round(a[0]), Math.round(a[1]), Math.round(b[0]), Math.round(b[1]));
         }
-        g.setColor(new Color(190, 255, 246));
+        g.setColor(core);
         g.setStroke(new BasicStroke(8, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.drawLine(Math.round(a[0]), Math.round(a[1]), Math.round(b[0]), Math.round(b[1]));
     }

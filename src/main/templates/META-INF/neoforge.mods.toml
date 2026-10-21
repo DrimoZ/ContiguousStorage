@@ -29,10 +29,11 @@ ordering = "NONE"
 side = "BOTH"
 
 # The mod only ever talks to Functional Storage's linking API (addConnectedDrawers, controllerPos).
+# FS versions read "1.21.1-1.5.7": a bare [1.5.7,) would let any FS for 1.21.1 through.
 [[dependencies.${mod_id}]]
 modId = "functionalstorage"
 type = "required"
-versionRange = "[1.5.7,)"
+versionRange = "[1.21.1-1.5.7,)"
 ordering = "AFTER"
 side = "BOTH"
 
