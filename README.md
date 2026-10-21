@@ -9,6 +9,8 @@ A drawer joins a Storage Controller's network by **touching** it, directly or th
 drawers and trims, as in Storage Drawers. Place a drawer against your wall and it is linked; break the
 middle of a chain and, if you want, the far side is cut off.
 
+Download: [Modrinth](https://modrinth.com/mod/contiguous-storage) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/contiguous-storage)
+
 ## How it works
 
 - **Faces only.** A drawer touches a network through one of its six faces, never a diagonal.

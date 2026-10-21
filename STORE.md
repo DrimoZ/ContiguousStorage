@@ -176,11 +176,11 @@ Storage or Storage Drawers.
 Main category **Addons** (of Functional Storage). Additional: Storage, Utility & QoL.
 Slug `contiguous-storage`, free on 21 Oct. 2026.
 
-<https://www.curseforge.com/minecraft/mc-mods/contiguous-storage>
+<https://www.curseforge.com/minecraft/mc-mods/contiguous-storage> (created 21 Oct. 2026, in review).
 
-## Modrinth — creating the project
+## Modrinth
 
-Slug `contiguous-storage` was still free on 21 Oct. 2026. Create at <https://modrinth.com/dashboard/projects>.
+<https://modrinth.com/mod/contiguous-storage> (created 21 Oct. 2026, in review).
 
 | Field | Value |
 |---|---|
@@ -206,7 +206,7 @@ Modrinth reviews a project before it goes public: submit it with its first versi
 
 ## Release checklist: 0.1.0
 
-- [x] Slug `contiguous-storage` free on both sites (21 Oct. 2026).
+- [x] Pages created on both sites, slug `contiguous-storage` (21 Oct. 2026), in review.
 - [x] 36/36 required game tests, in-game scenario 67/0 and 13/0, client without the mod refused
   cleanly (`MANUAL_TESTS.md`).
 - [x] GitHub `DrimoZ/ContiguousStorage`, public, branch `main`, tag `v0.1.0+1.21.1`.
