@@ -122,22 +122,27 @@ Rien de cette section n'a été vu en jeu : il faut un client.
       trim posé ne porte plus le réseau.
 - [ ] **Hache** : un trim se casse vite à la hache.
 
-## 5. Serveur seul, client sans le mod
+## 5. Client sans le mod
+
+Depuis les trims, le mod n'est plus côté serveur seul : un client sans le mod doit être **refusé
+proprement**, pas planter.
 
 ```bash
 ./gradlew runServer
+./gradlew runClientWithoutMod
 ```
 
 - Premier lancement : passer `eula=true` dans `run/eula.txt`, et `online-mode=false` dans
   `run/server.properties`.
-- [ ] **Connexion d'un client qui n'a pas Contiguous Storage** :
-  - Le client n'a que NeoForge 21.1.248, Functional Storage 1.21-1.5.7 et Titanium 1.21-4.0.34, par
-    exemple dans une instance Prism ou dans le launcher officiel. FS a des blocs, donc le client en a
-    besoin ; c'est **notre** mod qui ne doit pas y être.
-  - La connexion passe, et `runClient` ne convient pas, puisqu'il embarque le mod.
-- [ ] **Message côté client sans le mod** : le message du Linking Tool s'affiche en anglais, grâce au
-      texte de repli. La clé brute `message.contiguousstorage…` ne doit pas apparaître.
-- [ ] Les essais du §2 refaits côté serveur donnent le même résultat.
+- `runClientWithoutMod` est un client avec FS, Titanium et les mods de dev, mais sans Contiguous
+  Storage (source set vide `nomod`, dossier `run-nomod`). Il se connecte tout seul à `localhost:25565`.
+- [x] **Refusé proprement**, le 21 octobre 2026. Le client reste sur l'écran de déconnexion, sans
+  plantage, avec la raison « The server send registries with unknown keys:
+  ResourceKey[minecraft:block / contiguousstorage:crimson_trim], … ». Côté serveur, on lit seulement
+  « lost connection: Disconnected ». Le message est celui de NeoForge : il nomme nos trims, donc un
+  joueur comprend quel mod lui manque.
+- Les messages en `translatableWithFallback` restent utiles : un client qui a le mod mais un pack de
+  langue sans nos clés lit l'anglais.
 
 ## 6. Coût
 
@@ -176,6 +181,12 @@ scénario tout seul dans un vrai client, sur le monde `run/saves/scenario` (mond
 | S3 | Casse du 2e tiroir | Le bout est délié, « 3 drawer(s) disconnected » en barre d'action, fumée |
 | S4 | Linking Tool à travers le vide | « 1 drawer(s) not touching… », le tiroir reste libre |
 | S5 | Horloge d'observateurs collée à un tiroir pendant 5 s | 0 parcours de réseau |
+| Z (STRICT) | Linking Tool en **mode zone** sur 5 tiroirs : 3 contre le contrôleur, 2 après un vide | Les 3 restent reliés, les 2 sont déliés, « 2 drawer(s) not touching… » |
+| I | Contrôleur, **tiroir d'énergie d'Immaterial Drawers** posé par le joueur, puis un tiroir FS derrière | Les deux sont reliés : un tiroir d'addon conduit et se relie |
+| K0 | Contrôle Create : piston mécanique, moteur créatif, planches | Les planches montent de 2 blocs (le montage marche) |
+| K1–K5 | Même montage avec un tiroir FS relié, 32 diamants | Rien ne bouge, rien n'est dupliqué, le tiroir reste relié |
+| M1–M7 | Piston collant Create, **tiroir d'énergie d'Immaterial Drawers** relié, 10 000 FE, poussé de 2 blocs puis ramené, en STRICT puis en ASSIST | Ni duplication ni perte. STRICT : délié une fois éloigné. ASSIST : reste relié |
+| W | Mur de 306 planches, puis de 306 tiroirs, posés un par tick | Écart maximal entre deux ticks du client, comparé entre les deux murs (gel de FS #314) |
 | T1 | Barre d'inventaire avec les trims, dont un trim encadré habillé (diamant et or) | Capture du rendu des items |
 | T2 | Contrôleur, trim chêne, trim sapin, trim encadré nu, trim encadré habillé, tiroir | Tiroir relié, habillage gardé à la pose, capture rapprochée |
 | T3 | La même rangée en planches | Tiroir libre |
@@ -202,12 +213,40 @@ scénario tout seul dans un vrai client, sur le monde `run/saves/scenario` (mond
   - **le trim encadré habillé s'affiche avec son habillage en main et dans la barre d'inventaire.**
     La limite prévue par la session des trims ne se produit pas.
 
+### Résultats du 21 octobre 2026, scénario étendu (Z, I, K, M, W), Create 6.0.10 et Immaterial Drawers 0.2.1
+
+- **Phase 1 : 67 réussis, 0 échoué. Phase 2 : 13 réussis, 0 échoué.**
+- **Mode zone du Linking Tool (Z)** : correct, en STRICT. Les 3 tiroirs qui touchent restent reliés,
+  les 2 qui ne touchent pas sont déliés, et le message annonce bien 2 tiroirs.
+- **Immaterial Drawers (I)** : un tiroir d'énergie posé contre le contrôleur est relié, et un tiroir
+  FS atteint seulement à travers lui l'est aussi.
+- **Create, tiroirs FS (K)** : **Create ne déplace pas les tiroirs de FS.** FS les met tous, avec le
+  contrôleur et les extensions, dans le tag `c:relocation_not_supported`, que Create respecte. Le
+  contrôle K0 prouve que le montage fonctionne : les planches montent. Avec le tiroir, le piston reste
+  rétracté. Il n'y a donc ni duplication (#491) ni lien à défaire. **Ce qui n'est pas dans ce tag peut
+  bouger** : nos trims, les tiroirs d'addon et les conducteurs du tag.
+- **Create, tiroir d'Immaterial Drawers (M)** : il bouge, et rien n'est dupliqué ni perdu. On compte
+  1 tiroir et 10 000 FE à chaque étape, et aucun objet au sol.
+  - **STRICT** : poussé à 2 blocs, il est délié. Ramené contre le contrôleur, il **reste libre** :
+    l'auto-link ne relie que ce qu'un joueur pose, et une contraption ne pose rien au sens des
+    événements. C'est la règle d'accès décidée (`DESIGN.md` §3). Pour le relier à nouveau : le
+    Linking Tool, ou le casser et le reposer. **À écrire dans le README.**
+  - **ASSIST** : relié, il reste relié à 2 blocs, puis une fois ramené. Create garde `controllerPos`
+    dans les données du bloc, et l'auto-réparation de FS au chargement le relie à nouveau.
+  - Premier passage avec un piston non collant : le tiroir ne revient pas, ce qui ne prouvait rien.
+    Le scénario utilise maintenant un piston collant.
+- **Gel client de FS #314 (W)** : **non reproduit à 306 tiroirs.** Pour le mur de planches, l'écart
+  maximal entre deux ticks du client est de 72,3 ms ; pour le mur de tiroirs, de 73,7 ms. Aucun écart
+  ne dépasse 100 ms dans les deux cas. La pose moyenne côté serveur prend 0,51 ms pour les planches et
+  0,79 ms pour les tiroirs. Le dernier tiroir du mur est relié. Sur deux passages précédents, les
+  écarts allaient de 63,7 à 71,3 ms, avec le même résultat. #314 parle de réseaux bien plus grands :
+  ce n'est pas prouvé au-delà.
+- **Client sans le mod** : refusé proprement, voir §5.
+
 **Toujours pas couvert :**
-- **Un client sans le mod.** Avec les trims, le mod est désormais requis côté client. Il faudrait
-  vérifier qu'un client sans le mod est refusé proprement, ce qui demande un second client.
-- **Le mode zone du Linking Tool.**
-- **Le gel client de FS (#314)** sur un grand réseau.
-- **Create.**
+- **Le gel client de FS (#314) au-delà de 306 tiroirs.**
+- **Un trim déplacé par Create au milieu d'une chaîne** : en STRICT, il coupe la chaîne derrière lui.
+  Revenu, il ne relie rien, pour la même raison que M5. Ce cas est déduit, pas joué.
 - **Le déchargement réel en C1** est très probable (3 000 blocs, distance de vue 8), mais il n'est pas
   prouvé par un relevé.
 - **Le chargement de phase 2 sans gel** ne compte qu'un seul essai : sur serveur dédié, le gel de

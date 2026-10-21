@@ -6,6 +6,7 @@ repo/
 # Dev runtime
 run/
 run-gametest/
+run-nomod/
 
 # IDE
 .idea/

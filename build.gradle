@@ -14,6 +14,13 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 // (test tags) and the in-game scenario driver (./gradlew runClient -Pscenario, MANUAL_TESTS.md).
 sourceSets { gametest {} }
 configurations { gametestImplementation.extendsFrom implementation }
+// src/nomod does not exist: an empty source set whose classpath has the dependencies but not this
+// mod, for the clientWithoutMod run.
+sourceSets { nomod {} }
+configurations {
+    nomodImplementation.extendsFrom implementation
+    nomodRuntimeOnly.extendsFrom runtimeOnly
+}
 
 neoForge {
     version = project.neo_version
@@ -34,6 +41,15 @@ neoForge {
                 programArguments.addAll '--quickPlaySingleplayer', 'scenario'
                 systemProperty 'contiguousstorage.scenario', 'true'
             }
+        }
+        // A client with Functional Storage but not this mod, joining runServer: it must be turned
+        // away cleanly, since the trims are registered (MANUAL_TESTS.md).
+        clientWithoutMod {
+            client()
+            gameDirectory = project.file('run-nomod')
+            sourceSet = sourceSets.nomod
+            loadedMods = []
+            programArguments.addAll '--quickPlayMultiplayer', 'localhost:25565'
         }
         server {
             server()
@@ -64,6 +80,7 @@ neoForge {
         }
     }
     addModdingDependenciesTo(sourceSets.gametest)
+    addModdingDependenciesTo(sourceSets.nomod)
 }
 
 repositories {
@@ -86,6 +103,10 @@ dependencies {
     implementation "maven.modrinth:functional-storage:${functionalstorage_version}"
 
     runtimeOnly "maven.modrinth:jade:${jade_version}"
+    // Dev run only: the scenario moves a linked drawer with a Create contraption. -PnoCreate leaves it out.
+    if (!project.hasProperty('noCreate')) {
+        runtimeOnly "maven.modrinth:create:${create_version}"
+    }
 
     gametestImplementation sourceSets.main.output
 
