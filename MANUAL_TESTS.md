@@ -218,6 +218,24 @@ millisecondes, sur deux runs :
   ne portait que sur 50 tiroirs.
 - Poser un tiroir contre un réseau de 20 000 coûte 48 ms : on le sent quand on construit vite.
 
+**Après l'index des membres (21 octobre 2026).** Chaque opération est répétée après échauffement ;
+les valeurs sont min – médiane, en ms :
+
+| Opération | 2 027 tiroirs | 20 383 tiroirs |
+|---|---|---|
+| Parcours complet (avant : chaque passage du filet, chaque impulsion redstone en STRICT) | 8,7 – 11,4 | 26 – 37 |
+| **Vérification du filet par l'index** (sans parcours) | **0,75 – 1,0** | **1,9 – 2,6** |
+| Poser 1 tiroir, ancienne façon (parcours complet + ADD de FS) | 8,6 – 9,7 | 44 – 51 |
+| **Poser 1 tiroir, par l'index** (incrémental + ADD de FS) | **2,0 – 2,4** | **15,7 – 22,8** |
+| dont l'ADD de FS seul, sans rien de nous | 1,9 – 2,2 | 14,4 – 15,6 |
+| Horloge redstone collée au réseau (game test `theIndexWalksOnlyForRealCuts`) | 0 parcours | 0 parcours |
+
+- La pose ne coûte plus que ce que coûte FS : sur 20 000 tiroirs, l'ADD d'un seul tiroir lui prend
+  environ 15 ms, parce qu'il reconstruit et retrie toute sa liste. Ce n'est plus de notre ressort.
+- Le filet ne re-parcourt plus un réseau intact : il vérifie l'index en environ 1 à 3 ms.
+- Une vraie coupure coûte un parcours complet, une fois. Une casse en bordure, ou une casse dans une
+  boucle, n'en coûte aucun.
+
 **Create (C1) — pas fait.** Il faudrait Create dans le run de dev et un joueur pour assembler une
 contraption. Ce qu'il faudra vérifier en jeu :
 - un tiroir relié, déplacé puis reposé, ne doit pas se dupliquer (#491) ;

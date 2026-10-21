@@ -41,19 +41,15 @@ public final class CSEvents {
 
     /**
      * Runs on every block update of the server, and on the client too. OFF and the client leave at
-     * the first test. ASSIST only notes a controller set at that position (one map lookup), so that
-     * it is on the safety net if the world goes STRICT; only STRICT looks at the neighbours.
+     * the first test. Otherwise one hash lookup tells whether the changed position was a member of a
+     * known network, and one read whether it still is - redstone next to a network costs that and
+     * nothing more.
      */
     @SubscribeEvent
     public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
         CSConfig.Mode mode = CSConfig.mode();
-        if (mode == CSConfig.Mode.OFF || !(event.getLevel() instanceof ServerLevel level)) {
-            return;
-        }
-        if (mode == CSConfig.Mode.STRICT) {
-            Networks.neighborChanged(level, event.getPos());
-        } else {
-            Networks.register(level, event.getPos());
+        if (mode != CSConfig.Mode.OFF && event.getLevel() instanceof ServerLevel level) {
+            Networks.neighborChanged(level, event.getPos(), mode == CSConfig.Mode.STRICT);
         }
     }
 
@@ -108,9 +104,10 @@ public final class CSEvents {
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
+            CSConfig.Mode mode = CSConfig.mode();
             Networks.linkPlaced(level);
-            if (CSConfig.mode() == CSConfig.Mode.STRICT) {
-                Networks.validateDirty(level);
+            Networks.processChanges(level, mode);
+            if (mode == CSConfig.Mode.STRICT) {
                 Networks.safetyNet(level, CSConfig.VALIDATION_INTERVAL_TICKS.get());
             }
         }

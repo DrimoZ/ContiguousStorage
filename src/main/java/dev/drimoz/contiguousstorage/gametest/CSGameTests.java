@@ -44,6 +44,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ObserverBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
@@ -539,7 +540,7 @@ public final class CSGameTests {
         List<BlockPos> wall = IntStream.range(0, 50).mapToObj(i -> new BlockPos(i / 11, 1, i % 11)).toList();
         wall.forEach(pos -> helper.setBlock(pos, drawerBlock()));
         placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), CONTROLLER);
-        long[] before = new long[1];
+        long[] before = new long[2];
 
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
@@ -547,14 +548,15 @@ public final class CSGameTests {
                     StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
                     wall.forEach(pos -> assertLinked(helper, controller, pos, true, "once the wall has settled"));
                     before[0] = Networks.validations;
+                    before[1] = Networks.quickChecks;
                 })
                 .thenIdle(idle)
                 .thenExecute(() -> {
                     long walks = Networks.validations - before[0];
-                    helper.assertTrue(walks >= idle / interval,
-                            walks + " validations in " + idle + " ticks - the safety net never ran, so this test proves nothing");
-                    helper.assertTrue(walks <= idle / interval + 1,
-                            walks + " validations in " + idle + " ticks with nothing happening - expected one per safety net pass");
+                    long checks = Networks.quickChecks - before[1];
+                    helper.assertTrue(checks >= idle / interval,
+                            checks + " safety net checks in " + idle + " ticks - the safety net never ran, so this test proves nothing");
+                    helper.assertValueEqual(walks, 0L, "walks of an intact wall while idling (the index answers the safety net)");
                     StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
                     wall.forEach(pos -> assertLinked(helper, controller, pos, true, "after idling"));
                 })
@@ -813,6 +815,84 @@ public final class CSGameTests {
                 helper.getLevel().getServer(), null);
     }
 
+    // --- Member index (CLAUDE.md §8, task 13) -------------------------------------------------
+
+    /** Counts walks across the server, so it runs alone. */
+    private static final String STRICT_INDEX = "contiguousstorage_strict_index";
+
+    @BeforeBatch(batch = STRICT_INDEX)
+    public static void strictModeForIndex(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.STRICT);
+    }
+
+    @AfterBatch(batch = STRICT_INDEX)
+    public static void restoreModeAfterIndex(ServerLevel level) {
+        CSConfig.MODE.set(CSConfig.Mode.ASSIST);
+    }
+
+    /**
+     * The member index, in four steps on one network - two rows of drawers, z = 5 (x = 1..6) and
+     * z = 4 (x = 1..5), forming a loop, the controller at x = 0 touching x = 1 of the first row only:
+     * <ol>
+     *   <li>an observer clock pulsing against a drawer walks nothing, and the clock really runs;</li>
+     *   <li>breaking the end of a row, which nothing was reached through, walks nothing;</li>
+     *   <li>breaking a drawer of the loop walks nothing and unlinks nothing - the rest reattaches;</li>
+     *   <li>breaking the only drawer touching the controller is a real cut: walked, all unlinked.</li>
+     * </ol>
+     */
+    @GameTest(template = WALL, batch = STRICT_INDEX, timeoutTicks = 300)
+    public static void theIndexWalksOnlyForRealCuts(GameTestHelper helper) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        List<BlockPos> front = IntStream.rangeClosed(1, 6).mapToObj(x -> new BlockPos(x, 1, 5)).toList();
+        List<BlockPos> back = IntStream.rangeClosed(1, 5).mapToObj(x -> new BlockPos(x, 1, 4)).toList();
+        List<BlockPos> all = new ArrayList<>(front);
+        all.addAll(back);
+        all.forEach(pos -> helper.setBlock(pos, drawerBlock()));
+        controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, all.stream().map(helper::absolutePos).toArray(BlockPos[]::new));
+        BlockPos observer = new BlockPos(3, 1, 6);
+        long[] walks = new long[1];
+        int[] pulses = new int[1];
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    all.forEach(pos -> assertLinked(helper, controller, pos, true, "once settled"));
+                    // Two observers facing each other: a clock, pulsing into the drawer at (3, 1, 5).
+                    helper.setBlock(observer, Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.SOUTH));
+                    helper.setBlock(observer.south(), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.NORTH));
+                    walks[0] = Networks.validations;
+                })
+                .thenExecuteFor(40, () -> {
+                    if (helper.getBlockState(observer).getValue(ObserverBlock.POWERED)) {
+                        pulses[0]++;
+                    }
+                })
+                .thenExecute(() -> {
+                    helper.assertTrue(pulses[0] > 5, "the observer clock pulsed " + pulses[0] + " times - it does not run, so this step proves nothing");
+                    helper.assertValueEqual(Networks.validations - walks[0], 0L, "walks while a clock pulsed against the network");
+                    helper.destroyBlock(front.get(5));
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    helper.assertValueEqual(Networks.validations - walks[0], 0L, "walks after breaking the end of a row");
+                    helper.destroyBlock(front.get(2));
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    helper.assertValueEqual(Networks.validations - walks[0], 0L, "walks after breaking a drawer of the loop");
+                    all.stream().filter(pos -> !pos.equals(front.get(5)) && !pos.equals(front.get(2)))
+                            .forEach(pos -> assertLinked(helper, controller, pos, true, "around the loop after one of its drawers broke"));
+                    helper.destroyBlock(front.get(0));
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    helper.assertTrue(Networks.validations - walks[0] >= 1, "the real cut was not walked");
+                    all.stream().filter(pos -> !pos.equals(front.get(5)) && !pos.equals(front.get(2)) && !pos.equals(front.get(0)))
+                            .forEach(pos -> assertLinked(helper, controller, pos, false, "after the only drawer touching the controller broke"));
+                })
+                .thenSucceed();
+    }
+
     // --- Load measurement (CLAUDE.md §8, task 13) ---------------------------------------------
 
     /** Each builds far outside the template and forces chunks, so each runs alone. */
@@ -884,27 +964,71 @@ public final class CSGameTests {
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
-                    long[] walks = new long[3];
-                    for (int i = 0; i < walks.length; i++) {
+                    int size = drawers.size();
+                    // Each operation repeated, after the JIT has seen it: min and median, not one cold shot.
+                    double[] walk = new double[7];
+                    for (int i = 0; i < walk.length; i++) {
                         long start = System.nanoTime();
                         helper.assertValueEqual(Networks.validate(controller, chunks), 0, "drawers unlinked from an intact network");
-                        walks[i] = System.nanoTime() - start;
+                        walk[i] = ms(start);
                     }
-                    long start = System.nanoTime();
-                    Networks.DryRun dry = Networks.dryRun(level, List.of(controllerPos));
-                    LOGGER.info("LOAD validate of {} drawers (a safety net pass, network intact): {} / {} / {} ms; dryrun {} ms",
-                            drawers.size(), walks[0] / 1_000_000.0, walks[1] / 1_000_000.0, walks[2] / 1_000_000.0,
-                            (System.nanoTime() - start) / 1_000_000.0);
-                    helper.assertValueEqual(dry, new Networks.DryRun(1, 0, 0), "dry run of the intact network");
+                    LOGGER.info("LOAD [{}] full walk (validate, network intact): {}", size, stats(walk));
 
-                    // The everyday case: one more drawer set against the network. Auto-link walks the
-                    // whole network to find it.
-                    BlockPos extra = controllerPos.offset(0, height - height / 2, 0);
-                    level.setBlock(extra, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
-                    drawers.add(extra);
-                    long one = System.nanoTime();
-                    helper.assertValueEqual(Networks.linkFree(controller, chunks), 1, "drawers linked when one more is set against the network");
-                    LOGGER.info("LOAD linkFree of 1 drawer set against {} linked ones: {} ms", drawers.size() - 1, ms(one));
+                    double[] check = new double[15];
+                    for (int i = 0; i < check.length; i++) {
+                        long start = System.nanoTime();
+                        helper.assertValueEqual(Networks.quickCheck(controller), Boolean.TRUE, "safety net check of the intact network");
+                        check[i] = ms(start);
+                    }
+                    LOGGER.info("LOAD [{}] safety net check from the index (no walk): {}", size, stats(check));
+
+                    double[] dry = new double[5];
+                    for (int i = 0; i < dry.length; i++) {
+                        long start = System.nanoTime();
+                        helper.assertValueEqual(Networks.dryRun(level, List.of(controllerPos)), new Networks.DryRun(1, 0, 0), "dry run");
+                        dry[i] = ms(start);
+                    }
+                    LOGGER.info("LOAD [{}] dryrun: {}", size, stats(dry));
+
+                    // One drawer set on top of the network, three ways: rows of the top layer, so each
+                    // new drawer touches the network and stays in range.
+                    int top = height;
+                    double[] full = new double[3];
+                    for (int i = 0; i < full.length; i++) {
+                        BlockPos pos = origin.offset(i, top, 0);
+                        level.setBlock(pos, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        drawers.add(pos);
+                        long start = System.nanoTime();
+                        helper.assertValueEqual(Networks.linkFree(controller, chunks), 1, "drawers linked by a full walk");
+                        full[i] = ms(start);
+                    }
+                    LOGGER.info("LOAD [{}] placing 1 drawer, old way (full walk + FS ADD): {}", size, stats(full));
+
+                    double[] grow = new double[7];
+                    Player player = helper.makeMockPlayer(GameType.CREATIVE);
+                    for (int i = 0; i < grow.length; i++) {
+                        BlockPos pos = origin.offset(i, top, 2);
+                        level.setBlock(pos, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        drawers.add(pos);
+                        Networks.placed(level, pos, player);
+                        long start = System.nanoTime();
+                        Networks.linkPlaced(level);
+                        grow[i] = ms(start);
+                        helper.assertTrue(controllerPos.equals(((ControllableDrawerTile<?>) level.getBlockEntity(pos)).getControllerPos()),
+                                "the drawer placed against the network was not linked");
+                    }
+                    LOGGER.info("LOAD [{}] placing 1 drawer, index (incremental + FS ADD): {}", size, stats(grow));
+
+                    double[] fsAdd = new double[7];
+                    for (int i = 0; i < fsAdd.length; i++) {
+                        BlockPos pos = origin.offset(i, top, 4);
+                        level.setBlock(pos, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        drawers.add(pos);
+                        long start = System.nanoTime();
+                        controller.addConnectedDrawers(LinkingToolItem.ActionMode.ADD, pos);
+                        fsAdd[i] = ms(start);
+                    }
+                    LOGGER.info("LOAD [{}] Functional Storage's own ADD of 1 drawer, nothing of ours: {}", size, stats(fsAdd));
 
                     // Clean up outside the template: unlink all at once, then clear without updates.
                     controller.addConnectedDrawers(LinkingToolItem.ActionMode.REMOVE, drawers.toArray(BlockPos[]::new));
@@ -915,6 +1039,12 @@ public final class CSGameTests {
                     forced.forEach(chunk -> level.setChunkForced(chunk.x, chunk.z, false));
                 })
                 .thenSucceed();
+    }
+
+    private static String stats(double[] millis) {
+        double[] sorted = millis.clone();
+        java.util.Arrays.sort(sorted);
+        return String.format(java.util.Locale.ROOT, "min %.2f ms, median %.2f ms (n=%d)", sorted[0], sorted[sorted.length / 2], sorted.length);
     }
 
     private static double ms(long startNanos) {
