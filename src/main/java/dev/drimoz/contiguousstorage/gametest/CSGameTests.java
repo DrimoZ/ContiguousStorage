@@ -14,6 +14,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderSet;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.AfterBatch;
@@ -818,6 +819,10 @@ public final class CSGameTests {
         helper.assertTrue(Blocks.COPPER_BLOCK.defaultBlockState().is(NetworkWalker.CONDUCTORS),
                 "copper is not in #contiguousstorage:conductors - the src/gametest tag did not reach the run");
         helper.assertFalse(Blocks.OAK_PLANKS.defaultBlockState().is(NetworkWalker.CONDUCTORS), "planks are a conductor");
+        // The shipped tag lists Storage Drawers' trims as optional entries, and Storage Drawers is not
+        // in the run. Had one of them failed the load, the whole tag would be gone, copper with it.
+        helper.assertValueEqual(BuiltInRegistries.BLOCK.getTag(NetworkWalker.CONDUCTORS).map(HolderSet.Named::size).orElse(0), 1,
+                "blocks in #contiguousstorage:conductors (the shipped tag merged with the test one, trims skipped)");
         StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
         helper.setBlock(new BlockPos(1, 1, 5), Blocks.COPPER_BLOCK);
         helper.setBlock(new BlockPos(2, 1, 5), Blocks.COPPER_BLOCK);

@@ -1,0 +1,11 @@
+# Dev runs only, never shipped: data the game tests need, kept out of the real mod so that its
+# tags merge with the mod's own instead of shadowing them (one pack per mod). No code: lowcodefml.
+modLoader = "lowcodefml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "contiguousstorage_testdata"
+version = "0.0.0"
+displayName = "Contiguous Storage test data"
+description = '''Game test data for Contiguous Storage. Dev runs only.'''

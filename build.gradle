@@ -10,7 +10,7 @@ base { archivesName = mod_id }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-// Resources only (src/gametest/resources), merged into the mod in dev runs - see neoForge.mods.
+// Resources only (src/gametest/resources): a data-only mod present in dev runs - see neoForge.mods.
 sourceSets { gametest {} }
 
 neoForge {
@@ -47,8 +47,11 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
-            // Dev runs only, never the jar: data the game tests need, such as a block in the
-            // conductor tag, which ships empty.
+        }
+        // Dev runs only, never the jar: data the game tests need, such as copper in the conductor
+        // tag. A mod of its own (lowcodefml, no code) so its tag merges with the shipped one -
+        // two files at one path in a single mod would shadow each other instead.
+        contiguousstorage_testdata {
             sourceSet(sourceSets.gametest)
         }
     }

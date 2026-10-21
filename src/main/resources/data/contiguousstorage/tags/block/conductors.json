@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "storagedrawers:oak_trim", "required": false },
+    { "id": "storagedrawers:spruce_trim", "required": false },
+    { "id": "storagedrawers:birch_trim", "required": false },
+    { "id": "storagedrawers:jungle_trim", "required": false },
+    { "id": "storagedrawers:acacia_trim", "required": false },
+    { "id": "storagedrawers:dark_oak_trim", "required": false },
+    { "id": "storagedrawers:mangrove_trim", "required": false },
+    { "id": "storagedrawers:cherry_trim", "required": false },
+    { "id": "storagedrawers:bamboo_trim", "required": false },
+    { "id": "storagedrawers:crimson_trim", "required": false },
+    { "id": "storagedrawers:warped_trim", "required": false },
+    { "id": "storagedrawers:framed_trim", "required": false }
+  ]
+}
