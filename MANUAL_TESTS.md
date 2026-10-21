@@ -95,8 +95,10 @@ Passer `mode = "STRICT"`.
 - [ ] **Casser un conducteur (STRICT)** : casser le cuivre du milieu. Le tiroir au bout est délié,
       **au plus tard au passage du filet** (5 s). Si le cuivre cassé ne touchait aucun tiroir, aucun
       événement ne voit la coupure.
-- [ ] **Tag vide dans le jar livré** : dans une instance qui utilise le jar
-      (`build/libs/contiguousstorage-0.1.0+1.21.1.jar`), le cuivre ne conduit pas.
+- [ ] **Tag du jar livré** : dans une instance qui utilise le jar
+      (`build/libs/contiguousstorage-0.1.0+1.21.1.jar`), le cuivre ne conduit pas. Avec Storage
+      Drawers installé, ses trims conduisent (entrées optionnelles du tag, étape 12). Sans lui, le
+      monde charge sans erreur de tag.
   - Ajouter un datapack contenant `data/contiguousstorage/tags/block/conductors.json` avec
     `{"values": ["minecraft:copper_block"]}`, puis `/reload` : le cuivre conduit.
 
