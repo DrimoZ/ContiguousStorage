@@ -54,8 +54,9 @@ build instead of configure, the way Storage Drawers players know it.
   only, never diagonals.
 - ✅ **Every drawer Functional Storage has**, in every size, plus compacting, fluid, ender and
   framed drawers, and controller extensions.
-- ✅ **Addon drawers too**: anything built on Functional Storage's drawers conducts and links,
-  Immaterial Drawers' energy drawers included.
+- ✅ **Addon drawers too**: anything built on Functional Storage's drawers conducts and links.
+  Tested with [Immaterial Drawers](https://www.curseforge.com/minecraft/mc-mods/immaterial-drawers):
+  its energy drawers sit in the wall and join like any other.
 - ✅ **The controller's range still applies**, Range Upgrades included.
 - ✅ **A sparkle** on every drawer the moment it joins.
 
@@ -124,6 +125,7 @@ Trims carry the network and store nothing. Use them to space drawers out or fram
 | Loader | NeoForge 21.1+ |
 | [Functional Storage](https://www.curseforge.com/minecraft/mc-mods/functional-storage) | 1.21-1.5.7+ |
 | [Titanium](https://www.curseforge.com/minecraft/mc-mods/titanium) | required |
+| [Immaterial Drawers](https://www.curseforge.com/minecraft/mc-mods/immaterial-drawers) *(optional)* | 0.2+ |
 
 Needed on both the client and the server: the trims are blocks.
 
@@ -197,7 +199,7 @@ CurseForge.
 
 | Loader / game | Required | Optional |
 |---|---|---|
-| NeoForge / 1.21.1 | `functional-storage`, `titanium` | — |
+| NeoForge / 1.21.1 | `functional-storage`, `titanium` | `immaterial-drawers` |
 
 Modrinth reviews a project before it goes public: submit it with its first version attached.
 
@@ -217,5 +219,6 @@ Modrinth reviews a project before it goes public: submit it with its first versi
 |---|---|---|---|
 | `build/libs/contiguousstorage-0.1.0+1.21.1.jar` | 1.21.1 | NeoForge | 21 |
 
-- [ ] Required dependencies on the file: Functional Storage and Titanium.
+- [ ] Required dependencies on the file: Functional Storage and Titanium. Optional: Immaterial
+  Drawers (CurseForge "Optional Dependency", Modrinth "Optional").
 - [ ] Gallery: `01_wall` (featured), `03_autolink`, `04_cut`, `05_trims`, `02_wall_angle`, `06_dryrun`.
