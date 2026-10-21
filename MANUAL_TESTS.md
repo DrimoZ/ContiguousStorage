@@ -377,13 +377,10 @@ réseaux :
 5. **Client** : chaque lien renvoie toute la liste au client, qui recalcule la forme de tout le
    réseau (`rebuildShapes`, issue FS #314). **Non mesuré** : il faudrait un client.
 
-**Create (C1) — pas fait.** Il faudrait Create dans le run de dev et un joueur pour assembler une
-contraption. Ce qu'il faudra vérifier en jeu :
-- un tiroir relié, déplacé puis reposé, ne doit pas se dupliquer (#491) ;
-- à la repose, il revient dans le réseau s'il touche, et il est délié en STRICT s'il ne touche plus.
-
-Si Create repose le tiroir avec son ancien `controllerPos`, le `onLoad` de FS le relie à distance.
-En STRICT, le filet le défait au passage suivant ; en ASSIST, il reste relié **[supposé]**.
+**Create (C1) — fait le 21 octobre 2026**, dans le scénario (étapes K et M, voir plus haut). Les
+tiroirs de FS ne bougent pas. Un tiroir d'Immaterial Drawers bouge sans être dupliqué. La supposition
+d'ici se vérifie : en ASSIST, il reste relié. En STRICT, il est délié à distance, et il n'est pas
+relié à nouveau quand il revient.
 
 | Date | Section | Résultat | Notes |
 |---|---|---|---|

@@ -3,8 +3,8 @@ loaderVersion = "${loader_version_range}"
 license = "${mod_license}"
 issueTrackerURL = "https://github.com/DrimoZ/ContiguousStorage/issues"
 
-# Server-side only: no blocks, no items, no network payloads, so a client without the mod can join.
-# There is no displayTest key in FML 21.1 (checked, see SPIKE.md).
+# Needed on both sides since the trims: a client without the mod is refused by the registry check
+# (MANUAL_TESTS.md §5).
 [[mods]]
 modId = "${mod_id}"
 version = "${mod_version}"
