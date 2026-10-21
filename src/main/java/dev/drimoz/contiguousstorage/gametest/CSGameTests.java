@@ -15,6 +15,11 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.SectionPos;
+import net.minecraft.world.item.Items;
+import com.buuz135.functionalstorage.item.component.SizeProvider;
+import com.mojang.logging.LogUtils;
+import org.slf4j.Logger;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.AfterBatch;
@@ -806,6 +811,114 @@ public final class CSGameTests {
         return new CommandSourceStack(listener, Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO)), Vec2.ZERO,
                 helper.getLevel(), Commands.LEVEL_OWNERS, "contiguousstorage-test", Component.literal("test"),
                 helper.getLevel().getServer(), null);
+    }
+
+    // --- Load measurement (CLAUDE.md §8, task 13) ---------------------------------------------
+
+    /** Each builds far outside the template and forces chunks, so each runs alone. */
+    private static final String LOAD_2K = "contiguousstorage_load_2k";
+    private static final String LOAD_20K = "contiguousstorage_load_20k";
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
+    @GameTest(template = WALL, batch = LOAD_2K, required = false, timeoutTicks = 600)
+    public static void loadOf2000Drawers(GameTestHelper helper) {
+        measureLoad(helper, 13, 12, 1.0F);
+    }
+
+    @GameTest(template = WALL, batch = LOAD_20K, required = false, timeoutTicks = 1200)
+    public static void loadOf20000Drawers(GameTestHelper helper) {
+        measureLoad(helper, 28, 26, 2.0F);
+    }
+
+    /**
+     * Not a pass/fail test: a measurement, logged as "LOAD ...", of what the mod adds to a big
+     * network (Buuz135/FunctionalStorage#335). A {@code side x height x side} block of drawers above
+     * the template, the controller in its middle, its range raised by a range-modifier item when
+     * {@code rangeFactor > 1}. It only fails if the network itself is wrong.
+     */
+    private static void measureLoad(GameTestHelper helper, int side, int height, float rangeFactor) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(0, 10, 0));
+        BlockPos controllerPos = origin.offset(side / 2, height / 2, side / 2);
+        List<ChunkPos> forced = new ArrayList<>();
+        for (int cx = SectionPos.blockToSectionCoord(origin.getX()) - 1; cx <= SectionPos.blockToSectionCoord(origin.getX() + side) + 1; cx++) {
+            for (int cz = SectionPos.blockToSectionCoord(origin.getZ()) - 1; cz <= SectionPos.blockToSectionCoord(origin.getZ() + side) + 1; cz++) {
+                level.setChunkForced(cx, cz, true);
+                forced.add(new ChunkPos(cx, cz));
+            }
+        }
+        long t = System.nanoTime();
+        List<BlockPos> drawers = new ArrayList<>();
+        BlockState drawer = drawerBlock().defaultBlockState();
+        for (int x = 0; x < side; x++) {
+            for (int y = 0; y < height; y++) {
+                for (int z = 0; z < side; z++) {
+                    BlockPos pos = origin.offset(x, y, z);
+                    if (!pos.equals(controllerPos)) {
+                        level.setBlock(pos, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        drawers.add(pos);
+                    }
+                }
+            }
+        }
+        level.setBlock(controllerPos, FunctionalStorage.DRAWER_CONTROLLER.getBlock().defaultBlockState(), Block.UPDATE_CLIENTS);
+        StorageControllerTile<?> controller = (StorageControllerTile<?>) level.getBlockEntity(controllerPos);
+        if (rangeFactor > 1) {
+            ItemStack range = new ItemStack(Items.STICK);
+            range.set(FSAttachments.CONTROLLER_RANGE_MODIFIER, new SizeProvider.ModifyFactor(rangeFactor));
+            controller.getStorageUpgrades().setStackInSlot(0, range);
+            controller.recalculateUpgrades();
+        }
+        LOGGER.info("LOAD {} drawers placed in {} ms, controller range {}", drawers.size(), ms(t), controller.getStorageMultiplier());
+        AABB range = NetworkWalker.range(controller);
+        long outOfRange = drawers.stream().filter(pos -> !range.contains(Vec3.atCenterOf(pos))).count();
+        helper.assertValueEqual(outOfRange, 0L, "drawers outside the controller's range - make the range bigger");
+
+        LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
+        t = System.nanoTime();
+        int linked = Networks.linkFree(controller, chunks);
+        LOGGER.info("LOAD linkFree of {} drawers (one ADD, FS's own work included): {} ms", linked, ms(t));
+        helper.assertValueEqual(linked, drawers.size(), "drawers linked");
+
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    long[] walks = new long[3];
+                    for (int i = 0; i < walks.length; i++) {
+                        long start = System.nanoTime();
+                        helper.assertValueEqual(Networks.validate(controller, chunks), 0, "drawers unlinked from an intact network");
+                        walks[i] = System.nanoTime() - start;
+                    }
+                    long start = System.nanoTime();
+                    Networks.DryRun dry = Networks.dryRun(level, List.of(controllerPos));
+                    LOGGER.info("LOAD validate of {} drawers (a safety net pass, network intact): {} / {} / {} ms; dryrun {} ms",
+                            drawers.size(), walks[0] / 1_000_000.0, walks[1] / 1_000_000.0, walks[2] / 1_000_000.0,
+                            (System.nanoTime() - start) / 1_000_000.0);
+                    helper.assertValueEqual(dry, new Networks.DryRun(1, 0, 0), "dry run of the intact network");
+
+                    // The everyday case: one more drawer set against the network. Auto-link walks the
+                    // whole network to find it.
+                    BlockPos extra = controllerPos.offset(0, height - height / 2, 0);
+                    level.setBlock(extra, drawer, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                    drawers.add(extra);
+                    long one = System.nanoTime();
+                    helper.assertValueEqual(Networks.linkFree(controller, chunks), 1, "drawers linked when one more is set against the network");
+                    LOGGER.info("LOAD linkFree of 1 drawer set against {} linked ones: {} ms", drawers.size() - 1, ms(one));
+
+                    // Clean up outside the template: unlink all at once, then clear without updates.
+                    controller.addConnectedDrawers(LinkingToolItem.ActionMode.REMOVE, drawers.toArray(BlockPos[]::new));
+                    for (BlockPos pos : drawers) {
+                        level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                    }
+                    level.setBlock(controllerPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+                    forced.forEach(chunk -> level.setChunkForced(chunk.x, chunk.z, false));
+                })
+                .thenSucceed();
+    }
+
+    private static double ms(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000.0;
     }
 
     // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------

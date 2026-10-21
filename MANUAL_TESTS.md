@@ -193,6 +193,39 @@ reste à faire à la main.
 - `/setblock` refuse de remplacer un bloc identique, donc le NBT n'est pas appliqué.
 - `forceload remove all` a laissé un chunk forcé.
 
+### Charge — 21 octobre 2026, game tests `loadOf2000Drawers` / `loadOf20000Drawers`
+
+Ce sont des mesures, pas des tests réussis ou échoués (`required = false`). Elles sont journalisées
+sous `LOAD …` par `./gradlew runGameTestServer`. Chaque mesure construit un bloc plein de tiroirs
+au-dessus du template, avec le contrôleur au milieu. Le réseau de 20 383 tiroirs demande une portée
+×2 (16), obtenue par un objet portant `CONTROLLER_RANGE_MODIFIER`. Mesuré sur la machine de dev, en
+millisecondes, sur deux runs :
+
+| Réseau | Tout relier (`linkFree`, un seul ADD, travail de FS compris) | Un passage du filet (`validate`, réseau intact) | `dryrun` | Poser **un** tiroir contre le réseau |
+|---|---|---|---|---|
+| 2 027 tiroirs | 41 – 50 | 6 – 9 | 4 – 6 | 9 |
+| 20 383 tiroirs | 1 318 – 1 399 | 21 – 38 | 24 – 30 | 48 |
+
+**Lecture :**
+- Le coût est linéaire dans le nombre de tiroirs, à environ 1,5 µs par tiroir et par parcours.
+- Relier 20 000 tiroirs d'un coup coûte surtout du côté de FS : son `addConnectedDrawers` fait un
+  `List.contains` par tiroir, donc un coût quadratique. C'est un cas rare (un contrôleur posé contre
+  un mur libre géant).
+- Un passage du filet ne coûte que par contrôleur et par intervalle : 8 ms toutes les 5 s pour
+  2 000 tiroirs, 30 ms pour 20 000.
+- **Le vrai risque est en STRICT** : une horloge redstone collée à un réseau de 20 000 tiroirs le
+  ferait revalider à chaque mise à jour, soit 30 ms par tick. L'essai du 16 octobre (0,7 ms par tick)
+  ne portait que sur 50 tiroirs.
+- Poser un tiroir contre un réseau de 20 000 coûte 48 ms : on le sent quand on construit vite.
+
+**Create (C1) — pas fait.** Il faudrait Create dans le run de dev et un joueur pour assembler une
+contraption. Ce qu'il faudra vérifier en jeu :
+- un tiroir relié, déplacé puis reposé, ne doit pas se dupliquer (#491) ;
+- à la repose, il revient dans le réseau s'il touche, et il est délié en STRICT s'il ne touche plus.
+
+Si Create repose le tiroir avec son ancien `controllerPos`, le `onLoad` de FS le relie à distance.
+En STRICT, le filet le défait au passage suivant ; en ASSIST, il reste relié **[supposé]**.
+
 | Date | Section | Résultat | Notes |
 |---|---|---|---|
 | | | | |
