@@ -256,6 +256,25 @@ les valeurs sont min – médiane, en ms :
 - Une vraie coupure coûte un parcours complet, une fois. Une casse en bordure, ou une casse dans une
   boucle, n'en coûte aucun.
 
+**Lenteurs de Functional Storage, non corrigées (décision du 21 octobre 2026 : ni PR, ni mixin).**
+Elles sont lues dans le jar 1.5.7 et seront à reprendre dans la doc publique pour les packs à grands
+réseaux :
+
+1. **Inventaire du contrôleur** : chaque accès à un emplacement vérifie le tiroir par un
+   `List.contains` sur toute la liste des tiroirs (`ControllerInventoryHandler`). Un balayage complet
+   par une machine (entonnoir, tuyau, storage bus) coûte donc emplacements × tiroirs. C'est
+   **estimé** à quelques ms par balayage et par machine sur 2 000 tiroirs, **non mesuré**.
+2. **Reconstruction** (`ConnectedDrawers.rebuild`) : le tri recalcule ses clés à chaque comparaison,
+   et chaque block entity est relue deux fois. C'est le coût de tout `ADD` ou `REMOVE`, **mesuré** :
+   environ 2 ms sur 2 000 tiroirs, environ 15 ms sur 20 000.
+3. **Ajout en lot** (`addConnectedDrawers`) : un `List.contains` par tiroir ajouté, donc un coût
+   quadratique. **Mesuré** : relier 20 000 tiroirs d'un coup prend 2 à 5 s.
+4. **Rechargement d'un mur** : les tiroirs déchargés sortent de la liste, puis chacun se rajoute à
+   son `onLoad` avec une reconstruction complète. Revenir vers une base de 2 000 tiroirs coûte donc
+   2 000 reconstructions. **Non mesuré.**
+5. **Client** : chaque lien renvoie toute la liste au client, qui recalcule la forme de tout le
+   réseau (`rebuildShapes`, issue FS #314). **Non mesuré** : il faudrait un client.
+
 **Create (C1) — pas fait.** Il faudrait Create dans le run de dev et un joueur pour assembler une
 contraption. Ce qu'il faudra vérifier en jeu :
 - un tiroir relié, déplacé puis reposé, ne doit pas se dupliquer (#491) ;
