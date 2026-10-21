@@ -10,8 +10,10 @@ base { archivesName = mod_id }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-// Resources only (src/gametest/resources): a data-only mod present in dev runs - see neoForge.mods.
+// src/gametest: a dev-only mod present in dev runs, never in the jar - see neoForge.mods. Its data
+// (test tags) and the in-game scenario driver (./gradlew runClient -Pscenario, MANUAL_TESTS.md).
 sourceSets { gametest {} }
+configurations { gametestImplementation.extendsFrom implementation }
 
 neoForge {
     version = project.neo_version
@@ -26,6 +28,12 @@ neoForge {
             client()
             gameDirectory = project.file('run')
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            // -Pscenario: opens the world "scenario" and lets the dev-only driver play the manual
+            // test scenario by itself (src/gametest, ClientScenario).
+            if (project.hasProperty('scenario')) {
+                programArguments.addAll '--quickPlaySingleplayer', 'scenario'
+                systemProperty 'contiguousstorage.scenario', 'true'
+            }
         }
         server {
             server()
@@ -55,6 +63,7 @@ neoForge {
             sourceSet(sourceSets.gametest)
         }
     }
+    addModdingDependenciesTo(sourceSets.gametest)
 }
 
 repositories {
@@ -77,6 +86,8 @@ dependencies {
     implementation "maven.modrinth:functional-storage:${functionalstorage_version}"
 
     runtimeOnly "maven.modrinth:jade:${jade_version}"
+
+    gametestImplementation sourceSets.main.output
 
     // Game test 10: an addon drawer conducts and links. Immaterial Drawers is built next door and
     // not on a maven; without its jar the run still works and only that (non-required) test fails.

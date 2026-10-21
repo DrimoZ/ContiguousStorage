@@ -150,6 +150,69 @@ Rien de cette section n'a été vu en jeu : il faut un client.
 
 ---
 
+## Scénario joué dans un vrai client — `./gradlew runClient -Pscenario`
+
+Le mod de développement `contiguousstorage_testdata` (`src/gametest`, jamais dans le jar) joue ce
+scénario tout seul dans un vrai client, sur le monde `run/saves/scenario` (monde plat).
+
+- **Comment il joue.** Les poses et les casses passent par le `gameMode` du client, comme pour un
+  joueur, donc par les vrais paquets. Le Linking Tool est utilisé de la même façon. Les messages de la
+  barre d'action et du chat sont capturés, et des captures d'écran sont prises en chemin.
+- **Comment il vérifie.** Chaque résultat attendu est lu sur le serveur intégré, des deux côtés du lien
+  (`controllerPos` sur le tiroir, liste du contrôleur), puis écrit dans
+  `run/scenario/report-phaseN.txt`.
+- **Phase 1** : construire et vérifier, puis sauvegarder et quitter.
+- **Phase 2** : relancer la même commande, qui recharge le monde et vérifie que tout a tenu.
+- Pour rejouer depuis zéro : supprimer `run/scenario` et recopier un monde plat dans
+  `run/saves/scenario`.
+
+| Étape | Ce qui est fait | Attendu |
+|---|---|---|
+| A1–A2 (ASSIST) | Pose d'un contrôleur, de 5 tiroirs en ligne, puis d'un tiroir à un bloc d'écart | La ligne est reliée, l'isolé est libre |
+| A3 | Linking Tool sur le contrôleur, puis sur le tiroir isolé | Relié (ASSIST permet la distance) |
+| A4 | Casse du 3e tiroir | Rien n'est délié |
+| S1 (STRICT) | Passage en STRICT | En moins de 6 s, le tiroir relié à distance et les tiroirs coupés sont déliés |
+| S2 | Repose du 3e tiroir | La ligne entière se relie toute seule |
+| S3 | Casse du 2e tiroir | Le bout est délié, « 3 drawer(s) disconnected » en barre d'action, fumée |
+| S4 | Linking Tool à travers le vide | « 1 drawer(s) not touching… », le tiroir reste libre |
+| S5 | Horloge d'observateurs collée à un tiroir pendant 5 s | 0 parcours de réseau |
+| T1 | Barre d'inventaire avec les trims, dont un trim encadré habillé (diamant et or) | Capture du rendu des items |
+| T2 | Contrôleur, trim chêne, trim sapin, trim encadré nu, trim encadré habillé, tiroir | Tiroir relié, habillage gardé à la pose, capture rapprochée |
+| T3 | La même rangée en planches | Tiroir libre |
+| T4 | `/contiguousstorage dryrun` tapé dans le chat | Une réponse |
+| T5 | Onglets créatifs | Les trims y sont |
+| T6 | Trims désactivés + `/reload`, puis réactivés | Désactivés : tiroir libre, aucune recette, absents des onglets. Réactivés : tout revient |
+| C1 | Chaîne à cheval sur une bordure de chunk, joueur à 3 000 blocs pendant 20 s, puis retour | Tout est encore relié, pas de gel |
+| P1–P4 (phase 2) | Rechargement du monde | Charge sans geler, les coupures de S3 tiennent, les trims (habillage compris) et la chaîne de C1 tiennent |
+
+### Résultats du 21 octobre 2026
+
+- **Premier passage : 33 réussis, 14 échoués, tous dus au pilote.** Une téléportation et une action
+  dans le même tick perdent l'action, parce que le serveur n'a pas encore reçu la confirmation de la
+  téléportation. Le pilote a été corrigé : chaque déplacement a maintenant son étape.
+- **Second passage, monde neuf : phase 1 = 47 réussis, 0 échoué ; phase 2 = 13 réussis, 0 échoué.**
+- **Captures** (`run/screenshots/scenario_*.png`) :
+  - les trims chêne et sapin ont leur bûche en cadre et leurs planches au centre ;
+  - le trim encadré nu affiche le damier gris, comme les blocs encadrés nus de FS ;
+  - le trim encadré habillé a son cadre en diamant et son centre en or, et il reste identique après
+    le rechargement ;
+  - Jade affiche « Spruce Trim, Contiguous Storage » ;
+  - le message « 3 drawer(s) disconnected » et la fumée apparaissent à la coupure ;
+  - le toast « New Recipes Unlocked » montre un trim, donc les recettes générées sont chargées ;
+  - **le trim encadré habillé s'affiche avec son habillage en main et dans la barre d'inventaire.**
+    La limite prévue par la session des trims ne se produit pas.
+
+**Toujours pas couvert :**
+- **Un client sans le mod.** Avec les trims, le mod est désormais requis côté client. Il faudrait
+  vérifier qu'un client sans le mod est refusé proprement, ce qui demande un second client.
+- **Le mode zone du Linking Tool.**
+- **Le gel client de FS (#314)** sur un grand réseau.
+- **Create.**
+- **Le déchargement réel en C1** est très probable (3 000 blocs, distance de vue 8), mais il n'est pas
+  prouvé par un relevé.
+- **Le chargement de phase 2 sans gel** ne compte qu'un seul essai : sur serveur dédié, le gel de
+  FS 1.5.7 n'arrivait que 2 fois sur 3 sans le correctif.
+
 ## Résultats
 
 ### Campagne du 16 octobre 2026 — serveur dédié, piloté par Claude en RCON

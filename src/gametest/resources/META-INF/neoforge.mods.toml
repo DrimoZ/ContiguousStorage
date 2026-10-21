@@ -1,6 +1,7 @@
 # Dev runs only, never shipped: data the game tests need, kept out of the real mod so that its
-# tags merge with the mod's own instead of shadowing them (one pack per mod). No code: lowcodefml.
-modLoader = "lowcodefml"
+# tags merge with the mod's own instead of shadowing them (one pack per mod), and the driver that
+# plays the manual test scenario in a real client (./gradlew runClient -Pscenario).
+modLoader = "javafml"
 loaderVersion = "[4,)"
 license = "MIT"
 
@@ -8,4 +9,4 @@ license = "MIT"
 modId = "contiguousstorage_testdata"
 version = "0.0.0"
 displayName = "Contiguous Storage test data"
-description = '''Game test data for Contiguous Storage. Dev runs only.'''
+description = '''Game test data and the in-game scenario driver for Contiguous Storage. Dev runs only.'''
