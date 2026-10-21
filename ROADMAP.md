@@ -7,7 +7,6 @@ Nothing here has a date. Decisions and their reasons are in `DESIGN.md` (French)
 
 - Check that the slug `contiguous-storage` is free on CurseForge (it is on Modrinth), then create
   both pages from `STORE.md`.
-- A logo (`LICENSE-ASSETS`, All Rights Reserved, for that file only).
 
 ## Maybe later
 

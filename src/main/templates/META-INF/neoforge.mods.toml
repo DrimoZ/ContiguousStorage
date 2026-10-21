@@ -11,6 +11,7 @@ version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
 displayURL = "https://github.com/DrimoZ/ContiguousStorage"
+logoFile = "logo.png"
 description = '''${mod_description}'''
 
 [[dependencies.${mod_id}]]

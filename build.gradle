@@ -144,6 +144,7 @@ neoForge.ideSyncTask generateModMetadata
 
 tasks.named('jar', Jar) {
     from(file('LICENSE')) { into 'META-INF' }
+    from(file('LICENSE-ASSETS')) { into 'META-INF' }
 }
 
 tasks.withType(JavaCompile).configureEach {

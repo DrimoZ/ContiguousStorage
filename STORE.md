@@ -10,7 +10,7 @@ reference. Anything that changes goes into `README.md` first, then here.
 - **Loader / version:** NeoForge, Minecraft 1.21.1
 - **Environment:** client and server, both required
 - **Dependencies:** Functional Storage (required), Titanium (required)
-- **License:** MIT
+- **License:** MIT for the code; the logo is All Rights Reserved
 - **Source / issues:** https://github.com/DrimoZ/ContiguousStorage
 
 ---

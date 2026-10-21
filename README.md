@@ -118,4 +118,4 @@ only**, through one small mixin, and leaves newer versions alone.
 
 ## License
 
-MIT for the code (`LICENSE`).
+MIT for the code (`LICENSE`). The logo is All Rights Reserved (`LICENSE-ASSETS`).
