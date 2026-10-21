@@ -1,7 +1,7 @@
 Copyright (c) 2026 DrimoZ. All Rights Reserved.
 
-This covers the logo of Contiguous Storage only: logo/logo.svg and its renderings (logo/logo.png,
-src/main/resources/logo.png). It may be shown unchanged to refer to the mod, for example on mod
+This covers the logo of Contiguous Storage only: logo/logo.mjs, the logo/logo.svg it generates and
+its renderings (logo/logo.png, src/main/resources/logo.png). It may be shown unchanged to refer to the mod, for example on mod
 listings and pack pages. Any other use needs written permission.
 
 The code is licensed separately, under the MIT License (see LICENSE).
