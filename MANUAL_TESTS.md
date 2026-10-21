@@ -102,6 +102,26 @@ Passer `mode = "STRICT"`.
   - Ajouter un datapack contenant `data/contiguousstorage/tags/block/conductors.json` avec
     `{"values": ["minecraft:copper_block"]}`, puis `/reload` : le cuivre conduit.
 
+## 4 bis. Trims (ajoutés le 21 octobre 2026)
+
+Rien de cette section n'a été vu en jeu : il faut un client.
+
+- [ ] **Rendu des trims en bois** : chaque trim montre la bûche de son bois en cadre et ses planches au
+      centre, légèrement en retrait. Vérifier les 10 bois, y compris crimson et warped (tige).
+- [ ] **Item en main et dans l'inventaire** : même rendu que le bloc.
+- [ ] **Trim encadré** : avec la recette encadrée de FS (bloc A, bloc B, trim encadré), le cadre prend
+      A et le centre prend B. Le look reste après la pose, après un rechargement du monde, et après
+      la casse puis la repose.
+- [ ] **Trim encadré en item** : un trim habillé s'affiche probablement **sans** son habillage dans
+      l'inventaire. FS dessine ses items encadrés avec un rendu propre à ses items, que les nôtres
+      n'utilisent pas. Limite probable, à confirmer.
+- [ ] **Noms** : « Oak Trim », « Dark Oak Trim », « Framed Trim ». Le mod est maintenant requis côté
+      client, donc un client sans le fichier de langue n'existe plus.
+- [ ] **Onglets créatifs** : les trims sont dans l'onglet de FS et dans « Building Blocks ». Avec
+      `trimsEnabled = false`, ils n'y sont plus, leurs recettes disparaissent après `/reload`, et un
+      trim posé ne porte plus le réseau.
+- [ ] **Hache** : un trim se casse vite à la hache.
+
 ## 5. Serveur seul, client sans le mod
 
 ```bash
