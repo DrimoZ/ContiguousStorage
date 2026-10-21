@@ -5,7 +5,17 @@ import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import com.buuz135.functionalstorage.item.FSAttachments;
 import com.buuz135.functionalstorage.item.LinkingToolItem;
+import com.buuz135.functionalstorage.recipe.FramedDrawerRecipe;
+import com.buuz135.functionalstorage.util.DrawerWoodType;
 import dev.drimoz.contiguousstorage.CSConfig;
+import dev.drimoz.contiguousstorage.block.CSBlocks;
+import dev.drimoz.contiguousstorage.block.FramedTrimTile;
+import dev.drimoz.contiguousstorage.block.TrimPack;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.crafting.CraftingInput;
+import java.util.Map;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.NetworkWalker;
 import dev.drimoz.contiguousstorage.network.Networks;
@@ -1051,6 +1061,134 @@ public final class CSGameTests {
         return (System.nanoTime() - startNanos) / 1_000_000.0;
     }
 
+    // --- Trims (CLAUDE.md §8, task 12bis) -----------------------------------------------------
+
+    /** Turns trims off for the whole level, so it runs alone. */
+    private static final String TRIMS_OFF = "contiguousstorage_trims_off";
+
+    @BeforeBatch(batch = TRIMS_OFF)
+    public static void trimsOff(ServerLevel level) {
+        CSConfig.TRIMS_ENABLED.set(false);
+    }
+
+    @AfterBatch(batch = TRIMS_OFF)
+    public static void trimsBackOn(ServerLevel level) {
+        CSConfig.TRIMS_ENABLED.set(true);
+    }
+
+    /** One trim per wood Functional Storage makes drawers of - FRAMED aside, it has its own trim. */
+    @GameTest(template = WALL)
+    public static void thereIsATrimPerFunctionalStorageWood(GameTestHelper helper) {
+        List<String> woods = FunctionalStorage.WOOD_TYPES.stream().filter(wood -> wood != DrawerWoodType.FRAMED)
+                .map(wood -> wood.getName() + "_trim").toList();
+        List<String> trims = CSBlocks.WOOD_TRIMS.keySet().stream().map(trim -> BuiltInRegistries.BLOCK.getKey(trim).getPath()).toList();
+        helper.assertValueEqual(trims, woods, "trims registered, in Functional Storage's wood order");
+        helper.assertTrue(CSBlocks.FRAMED_TRIM != null && BuiltInRegistries.BLOCK.getKey(CSBlocks.FRAMED_TRIM).getPath().equals("framed_trim"),
+                "the framed trim is not registered");
+        helper.succeed();
+    }
+
+    /** Two oak trims, and two framed trims, carry the network to a drawer placed past them; two planks do not. */
+    @GameTest(template = WALL)
+    public static void trimsCarryTheNetwork(GameTestHelper helper) {
+        trimsAndPlanks(helper, true);
+    }
+
+    /** Inverse: trims turned off are only decoration. */
+    @GameTest(template = WALL, batch = TRIMS_OFF)
+    public static void disabledTrimsCarryNothing(GameTestHelper helper) {
+        trimsAndPlanks(helper, false);
+    }
+
+    private static void trimsAndPlanks(GameTestHelper helper, boolean trimsCarry) {
+        StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
+        Block oakTrim = CSBlocks.WOOD_TRIMS.keySet().iterator().next();
+        helper.setBlock(new BlockPos(1, 1, 5), oakTrim);
+        helper.setBlock(new BlockPos(2, 1, 5), oakTrim);
+        helper.setBlock(new BlockPos(0, 1, 4), CSBlocks.FRAMED_TRIM);
+        helper.setBlock(new BlockPos(0, 1, 3), CSBlocks.FRAMED_TRIM);
+        helper.setBlock(new BlockPos(0, 1, 6), Blocks.OAK_PLANKS);
+        helper.setBlock(new BlockPos(0, 1, 7), Blocks.OAK_PLANKS);
+        BlockPos pastTrims = new BlockPos(3, 1, 5);
+        BlockPos pastFramed = new BlockPos(0, 1, 2);
+        BlockPos pastPlanks = new BlockPos(0, 1, 8);
+        placeAsPlayer(helper, drawerBlock(), pastTrims);
+        placeAsPlayer(helper, drawerBlock(), pastFramed);
+        placeAsPlayer(helper, drawerBlock(), pastPlanks);
+        helper.startSequence()
+                .thenIdle(SETTLE_TICKS)
+                .thenExecute(() -> {
+                    assertLinked(helper, controller, pastTrims, trimsCarry, "past two oak trims, trims enabled: " + trimsCarry);
+                    assertLinked(helper, controller, pastFramed, trimsCarry, "past two framed trims, trims enabled: " + trimsCarry);
+                    assertLinked(helper, controller, pastPlanks, false, "past two planks");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * The generated pack: per trim a blockstate, a block and an item model, a name, a loot table and
+     * a recipe - no recipe at all when trims are off - and the server really loaded it.
+     */
+    @GameTest(template = WALL)
+    public static void theGeneratedPackHasEverything(GameTestHelper helper) {
+        Map<ResourceLocation, byte[]> client = TrimPack.contents(PackType.CLIENT_RESOURCES, true);
+        Map<ResourceLocation, byte[]> server = TrimPack.contents(PackType.SERVER_DATA, true);
+        Map<ResourceLocation, byte[]> serverOff = TrimPack.contents(PackType.SERVER_DATA, false);
+        String lang = new String(client.get(CSBlocks.id("lang/en_us.json")), java.nio.charset.StandardCharsets.UTF_8);
+        for (Block trim : CSBlocks.all()) {
+            String name = BuiltInRegistries.BLOCK.getKey(trim).getPath();
+            for (String path : List.of("blockstates/" + name + ".json", "models/block/" + name + ".json", "models/item/" + name + ".json")) {
+                helper.assertTrue(client.containsKey(CSBlocks.id(path)), "missing from the client pack: " + path);
+            }
+            helper.assertTrue(lang.contains("block.contiguousstorage." + name), "no name for " + name);
+            helper.assertTrue(server.containsKey(CSBlocks.id("loot_table/blocks/" + name + ".json")), "no loot table for " + name);
+            helper.assertTrue(serverOff.containsKey(CSBlocks.id("loot_table/blocks/" + name + ".json")), "no loot table for " + name + " with trims off");
+            helper.assertTrue(server.containsKey(CSBlocks.id("recipe/" + name + ".json")), "no recipe for " + name);
+            helper.assertTrue(helper.getLevel().getRecipeManager().byKey(CSBlocks.id(name)).isPresent(),
+                    "the server did not load the recipe of " + name + " - is the generated pack registered?");
+        }
+        helper.assertTrue(lang.contains("Dark Oak Trim"), "names are not titled: " + lang);
+        helper.assertTrue(serverOff.keySet().stream().noneMatch(path -> path.getPath().startsWith("recipe/")), "recipes with trims off");
+        helper.assertTrue(server.containsKey(ResourceLocation.withDefaultNamespace("tags/block/mineable/axe.json")), "no axe tag");
+        helper.succeed();
+    }
+
+    @GameTest(template = WALL)
+    public static void aTrimDropsItself(GameTestHelper helper) {
+        Block oakTrim = CSBlocks.WOOD_TRIMS.keySet().iterator().next();
+        BlockPos pos = new BlockPos(5, 2, 5);
+        helper.setBlock(pos, oakTrim);
+        // helper.destroyBlock drops nothing; a player's break does.
+        helper.getLevel().destroyBlock(helper.absolutePos(pos), true);
+        helper.assertItemEntityPresent(oakTrim.asItem(), pos, 2.0);
+        helper.succeed();
+    }
+
+    /**
+     * Functional Storage's own framed recipe dresses the framed trim - stone frame, oak core - the look
+     * goes into the block when placed, and back into the item when broken.
+     */
+    @GameTest(template = WALL)
+    public static void theFramedTrimTakesFunctionalStoragesFramedRecipe(GameTestHelper helper) {
+        CraftingInput input = CraftingInput.of(3, 1, List.of(new ItemStack(Blocks.STONE), new ItemStack(Blocks.OAK_PLANKS), new ItemStack(CSBlocks.FRAMED_TRIM)));
+        FramedDrawerRecipe recipe = new FramedDrawerRecipe();
+        helper.assertTrue(recipe.matches(input, helper.getLevel()), "Functional Storage's framed recipe does not take the framed trim");
+        ItemStack dressed = recipe.assemble(input, helper.getLevel().registryAccess());
+        helper.assertTrue(dressed.has(FSAttachments.STYLE.get()), "the framed recipe gave no style");
+
+        BlockPos pos = new BlockPos(5, 2, 5);
+        placeStackAsPlayer(helper, dressed, pos);
+        FramedTrimTile tile = helper.getBlockEntity(pos);
+        helper.assertValueEqual(tile.getFramedDrawerModelData().getDesign().get("side"), Items.STONE, "frame of the placed framed trim");
+        helper.assertValueEqual(tile.getFramedDrawerModelData().getDesign().get("front"), Items.OAK_PLANKS, "core of the placed framed trim");
+
+        helper.getLevel().destroyBlock(helper.absolutePos(pos), true);
+        ItemStack dropped = helper.getEntities(EntityType.ITEM).stream().map(ItemEntity::getItem)
+                .filter(stack -> stack.is(CSBlocks.FRAMED_TRIM.asItem())).findFirst().orElse(ItemStack.EMPTY);
+        helper.assertValueEqual(dropped.get(FSAttachments.STYLE.get()), dressed.get(FSAttachments.STYLE.get()), "style of the dropped framed trim");
+        helper.succeed();
+    }
+
     // --- Conductor tag (CLAUDE.md §8, task 8) -------------------------------------------------
 
     /**
@@ -1132,13 +1270,16 @@ public final class CSGameTests {
      * than going on top - the wall template's y = 1 layer is solid.
      */
     private static void placeAsPlayer(GameTestHelper helper, Block block, BlockPos pos) {
+        placeStackAsPlayer(helper, new ItemStack(block), pos);
+    }
+
+    private static void placeStackAsPlayer(GameTestHelper helper, ItemStack stack, BlockPos pos) {
         helper.setBlock(pos, Blocks.AIR);
         Player player = helper.makeMockPlayer(GameType.CREATIVE);
-        ItemStack stack = new ItemStack(block);
         // placeAt's UseOnContext reads the item from the player's hand, not from the stack it is given.
-        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack.copy());
         helper.placeAt(player, stack, pos.below(), Direction.UP);
-        helper.assertBlockPresent(block, pos);
+        helper.assertBlockPresent(((net.minecraft.world.item.BlockItem) stack.getItem()).getBlock(), pos);
     }
 
     private static StorageControllerTile<?> placeLinkedChain(GameTestHelper helper) {

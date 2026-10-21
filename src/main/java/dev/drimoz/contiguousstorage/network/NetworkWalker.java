@@ -2,7 +2,10 @@ package dev.drimoz.contiguousstorage.network;
 
 import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
+import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
+import dev.drimoz.contiguousstorage.block.TrimBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -102,7 +105,7 @@ public final class NetworkWalker {
                     } else {
                         continue;
                     }
-                } else if (chunk.getBlockState(cursor).is(CONDUCTORS)) {
+                } else if (isConductor(chunk.getBlockState(cursor))) {
                     conductors.add(pos);
                 } else {
                     continue;
@@ -141,6 +144,14 @@ public final class NetworkWalker {
             BlockPos owner = drawer.getControllerPos();
             return !(be instanceof StorageControllerTile<?>) && (owner == null || owner.equals(controllerPos));
         }
-        return chunk.getBlockState(pos).is(CONDUCTORS);
+        return isConductor(chunk.getBlockState(pos));
+    }
+
+    /**
+     * A block that carries a network without being linked to it: one in the conductor tag, or one of
+     * this mod's trims while they are enabled - turned off, a placed trim is only decoration.
+     */
+    public static boolean isConductor(BlockState state) {
+        return state.is(CONDUCTORS) || (state.getBlock() instanceof TrimBlock && CSConfig.TRIMS_ENABLED.get());
     }
 }

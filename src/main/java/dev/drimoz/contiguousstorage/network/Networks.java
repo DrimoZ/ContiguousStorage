@@ -522,7 +522,7 @@ public final class Networks {
 
     private static boolean isConductor(BlockPos pos, LongFunction<LevelChunk> chunks) {
         LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
-        return chunk != null && chunk.getBlockState(pos).is(NetworkWalker.CONDUCTORS);
+        return chunk != null && NetworkWalker.isConductor(chunk.getBlockState(pos));
     }
 
     /** The controller at {@code pos}, or the one the drawer at {@code pos} is linked to, if loaded. */

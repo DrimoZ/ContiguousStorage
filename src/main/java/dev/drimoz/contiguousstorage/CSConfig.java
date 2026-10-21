@@ -17,6 +17,7 @@ public final class CSConfig {
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.EnumValue<Mode> MODE;
     public static final ModConfigSpec.IntValue VALIDATION_INTERVAL_TICKS;
+    public static final ModConfigSpec.BooleanValue TRIMS_ENABLED;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -33,6 +34,12 @@ public final class CSConfig {
                         "block updates missed (a mod that sets blocks without notifying neighbours, for instance).",
                         "It bounds how long a drawer can stay wrongly linked. 0 disables it - not recommended.")
                 .defineInRange("validationIntervalTicks", 100, 0, 72000);
+        TRIMS_ENABLED = builder
+                .comment("This mod's trim blocks: one per Functional Storage wood, and a framed one. They carry networks.",
+                        "false: no recipe, not in the creative tabs, and trims already placed stop carrying networks -",
+                        "they stay in the world as decoration. The blocks themselves stay registered: clients and server",
+                        "must agree on them. Recipes follow on /reload.")
+                .define("trimsEnabled", true);
         SPEC = builder.build();
     }
 
