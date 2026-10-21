@@ -64,6 +64,15 @@ dev.drimoz.<modid>/
   gametest/                ← <Prefix>GameTests
 ```
 
+Exception, ajoutée le 17 octobre 2026 : `mixin/`, qui contient seulement le report du correctif de
+FS contre le deadlock de chargement de la 1.5.7 (`DESIGN.md` §3). Il est appliqué à FS ≤ 1.5.7 par
+`CSMixinPlugin`, et à supprimer quand FS publie la 1.5.8. Mixin exige un package dédié.
+
+Exception, ajoutée le 21 octobre 2026 : `block/`, pour les trims (`DESIGN.md` §3). Il contient
+`CSBlocks`, `TrimBlock`, `FramedTrimBlock`, `FramedTrimTile` et `TrimPack`, un pack généré en mémoire
+pour les modèles, les noms, les recettes et les loot tables. Depuis, le mod n'est plus côté serveur
+seul.
+
 C'est petit à dessein. Si le mod a besoin d'un quatrième package, c'est qu'il est en train de devenir
 autre chose.
 
@@ -316,7 +325,8 @@ Config serveur. Elle s'applique au monde, pas au joueur.
 | `MODE` | `ASSIST` (décidé, `DESIGN.md` §4) | `OFF` : FS d'origine. `ASSIST` : auto-link par contact, le Linking Tool marche toujours à distance. `STRICT` : connexion physique obligatoire. |
 | `VALIDATION_INTERVAL_TICKS` | `100` | Période du filet. `0` désactive le filet (déconseillé, à documenter comme tel). |
 
-Et un **tag de blocs**, pas une clé de config : `#<modid>:conductors`. Il est vide par défaut. Un pack
+Et un **tag de blocs**, pas une clé de config : `#<modid>:conductors`. Il ne contient par défaut que
+les trims de Storage Drawers, en entrées optionnelles (étape 12). Un pack
 y ajoute ce qui doit conduire sans être relié (blocs décoratifs, Armory Cabinet…). C'est de la donnée,
 modifiable par datapack et rechargée par `/reload`.
 
@@ -359,6 +369,9 @@ Tests minimum, chacun avec le contrôle inverse :
 10. `anAddonDrawerConductsAndLinks` — avec un tiroir d'Immaterial Drawers.
 11. `aWallOfDrawersDoesNotRevalidateEveryTick` — 50 tiroirs, aucun `REMOVE` et aucun BFS en dehors
     des passages du filet. C'est le pendant du test anti-rebuild d'Immaterial Drawers.
+12. `aDrawerPlacedByAnOutsiderIsNotLinked` — et le même joueur, avec l'accès, relie.
+13. `aCutReportsTheDisconnectedDrawers` — le bon compte, et le plafond de particules tient.
+14. `dryrunCountsWithoutRemoving` — en `ASSIST`, le compte est juste et rien n'est retiré.
 
 ---
 
@@ -445,7 +458,107 @@ Tests minimum, chacun avec le contrôle inverse :
      le contrôleur au bout.
    - **Limite :** casser un conducteur qui ne touche **aucun** tiroir ne marque rien, puisque
      `neighborChanged` ne lit que des block entities. Le filet le rattrape au passage suivant.
-9. Docs publiques, page CurseForge, release.
+
+Les étapes 9 à 13 viennent de l'étude du 16 octobre 2026 (`IDEAS.md` §5, décisions dans
+`DESIGN.md` §3). Elles passent toutes avant la release.
+
+9. **Contrôle d'accès à l'auto-link** (`IDEAS.md` §4). Test 12.
+   - Dans `linkPlaced`, ne relier que si le joueur qui a posé pourrait interagir avec le contrôleur
+     trouvé : `level.mayInteract(player, controllerPos)` **[à vérifier]** dans 1.21.1, et
+     **[à vérifier]** que FTB Chunks le respecte (il peut passer par ses propres événements).
+   - La file de poses doit donc garder le joueur avec la position. Une pose sans joueur (un autre mod
+     qui émet `EntityPlaceEvent` avec une entité non joueur) ne relie rien.
+   - Test 12 `aDrawerPlacedByAnOutsiderIsNotLinked` : joueur simulé en mode aventure, ou claim
+     simulé si l'API le permet ; contrôle inverse, le même joueur en survie relie.
+   - **Fait** le 17 octobre 2026 (`883d8ae`).
+     - **[lu]** `Level.mayInteract` vaut `true` dans `Level`. Dans `ServerLevel`, il teste seulement
+       la protection du spawn et la bordure du monde (`ServerLevel.java:806`).
+     - Le test 12 fait donc passer la bordure du monde entre deux contrôleurs, dans un batch à part.
+       La protection du spawn est inactive sur un serveur de game tests.
+     - **Limite assumée pour la v1, décidée le 17 octobre 2026 : les claims ne sont pas couverts.**
+       Les mods de claims (FTB Chunks, Open Parties and Claims…) protègent en annulant des
+       événements, pas par `mayInteract` **[supposé, non lu]**. Sur un serveur à claims, un joueur
+       peut donc encore relier son tiroir au mur d'un autre en le posant hors du claim, contre ce
+       mur. À écrire dans le README et la page du mod. Une intégration optionnelle avec les claims
+       est reportée après la v1.
+10. **Retour de coupure** (`IDEAS.md` V1, V2). Test 13.
+   - Le joueur qui a cassé : `BreakEvent` le met avec le contrôleur marqué, comme le fait déjà le
+     Linking Tool à l'étape 7. Au tick, `validate` rend le compte : message en barre d'action
+     « N drawer(s) disconnected » (`translatableWithFallback`), seulement si N > 0.
+   - Particules : `ServerLevel.sendParticles`, une fois par tiroir retiré (fumée), et une fois par
+     tiroir relié à la pose (`HAPPY_VILLAGER`). **Plafond** de tiroirs à particules par coupure
+     (32), pour ne pas inonder un client sur un mur de 2 000 tiroirs.
+   - `validate` et `linkFree` doivent donc rendre les positions, pas seulement le nombre.
+   - Test 13 : le compte rendu est le bon, et le plafond tient. Le message lui-même ne se teste pas
+     (le joueur simulé ne le reçoit pas, voir l'étape 7).
+   - **Fait** le 17 octobre 2026.
+     - `Networks.broken`, appelé par `BreakEvent`, marque les contrôleurs du bloc cassé et de ses
+       voisins, avec un `Report` pour le joueur.
+     - `validate` et `linkFree` passent par `unlink` et `link`, qui rendent les positions.
+       `strays` calcule ce que STRICT délierait sans rien retirer : il resservira pour `dryrun`.
+     - Les particules sont `SMOKE` à la coupure et `HAPPY_VILLAGER` à l'auto-link, plafonnées à
+       `PARTICLE_CAP = 32` tiroirs.
+     - **Le message se teste quand même.** Un `Player` de test (`ListeningPlayer`) garde ce que la
+       barre d'action aurait montré. Le test vérifie « 3 drawer(s) disconnected » puis « 120 … »,
+       c'est-à-dire le texte de repli qu'un client sans le mod reçoit. Il vérifie aussi 3 puis 32
+       tiroirs à particules. Il tourne seul dans son batch, puisque `particlesSent` est global.
+11. **Commande `/contiguousstorage dryrun`** (`IDEAS.md` A1). Test 14.
+   - `RegisterCommandsEvent`, dans `event/` : pas de nouveau package (§2).
+   - Fait le travail de `validate` sur les contrôleurs chargés de la dimension, **sans** le
+     `REMOVE`, dans n'importe quel mode. Rend : contrôleurs lus, contrôleurs sautés (chunk manquant),
+     tiroirs que `STRICT` retirerait. Permission 2.
+   - Test 14 `dryrunCountsWithoutRemoving` : en `ASSIST`, une chaîne coupée donne le bon compte et
+     les tiroirs restent liés.
+   - **Fait** le 18 octobre 2026 (`21785df`).
+     - `Networks.dryRun` s'appuie sur `strays` et parcourt les contrôleurs du registre de la
+       dimension. Il rend `DryRun(checked, skipped, strays)`. Un contrôleur dont le chunk ou une partie
+       du réseau n'est pas chargé compte comme sauté.
+     - La commande est enregistrée dans `CSEvents.onRegisterCommands`, avec la permission
+       `LEVEL_GAMEMASTERS`. Sa réponse a un texte de repli anglais. Elle rend le nombre de tiroirs,
+       ce qui permet `execute store`.
+     - Le test 14 compte sur le contrôleur du test seul, parce que les autres tests laissent des
+       contrôleurs dans le monde. Il lance aussi la vraie commande par le dispatcher, avec une source
+       qui capture la réponse.
+     - **Limite :** la commande ne voit que le registre. Un contrôleur posé par commande en OFF n'y
+       entre qu'au rechargement de son chunk.
+12. **Trims de Storage Drawers dans le tag** (`IDEAS.md` R1). Test 8 étendu.
+   - Cela **change l'étape 8** : le tag est désormais livré, avec des entrées `"required": false`.
+     Un pack sans Storage Drawers garde un tag vide, et un pack peut toujours le remplacer
+     (`"replace": true`).
+   - **[à vérifier]** les IDs des trims de Storage Drawers en 1.21.1 (un par essence de bois, a priori).
+   - Vérifier que le jar contient ce fichier, et **toujours pas** le tag des game tests.
+   - **Fait** le 21 octobre 2026 (`e20cfe6`).
+     - **[lu]** IDs sur la branche `1.21` de Storage Drawers (13.2.0, Minecraft 1.21, jar 1.21.1 non
+       lu) : `oak_trim`, `spruce_trim`, `birch_trim`, `jungle_trim`, `acacia_trim`, `dark_oak_trim`,
+       `mangrove_trim`, `cherry_trim`, `bamboo_trim`, `crimson_trim`, `warped_trim`, `framed_trim`
+       (`core/ModBlocks.java`). Ils sont tous en `"required": false` : un ID faux ne coûte rien.
+     - **Piège trouvé :** dans un même mod, deux fichiers au même chemin se masquent au lieu de
+       fusionner. Le tag de test (cuivre) est donc passé dans un mod de dev à part,
+       `contiguousstorage_testdata`. Il n'a aucun code (`lowcodefml`) : c'est seulement
+       `src/gametest/resources` et son `neoforge.mods.toml`.
+     - Le test 8 vérifie aussi que le tag contient exactement le cuivre en dev. Si une entrée avait
+       fait échouer le chargement, tout le tag serait tombé.
+     - Jar vérifié : le tag livré contient 12 trims et pas de cuivre.
+13. **Test de charge et test avec Create** (`IDEAS.md` P1, P2, C1).
+   - Charge : un mur de 2 000 puis 20 000 tiroirs (`Buuz135/FunctionalStorage#335`). Mesurer un
+     passage du filet et un `linkFree`. Si un passage dépasse quelques ms, ajouter un plafond de
+     taille de réseau (`IDEAS.md` R3), pas avant.
+   - Gel client : sur 300 tiroirs en jeu, chaque `ADD` déclenche `rebuildShapes` chez le client
+     (`ConnectedDrawers.java:155`, issue #314). Vérifier que poser vite ne gèle pas plus qu'avec le
+     Linking Tool.
+   - Create : un tiroir déplacé par une contraption puis reposé. Rien ne doit être dupliqué (#491),
+     et le tiroir doit revenir dans le réseau à la repose.
+   - Résultats dans `MANUAL_TESTS.md` pour ce qui ne se fait pas en game test.
+   - **Fait** le 21 octobre 2026 (`6517c0f` pour le scénario étendu). Le détail est dans `MANUAL_TESTS.md`.
+     - **Charge :** linéaire, et l'index des membres évite les parcours.
+     - **Gel #314 :** non reproduit à 306 tiroirs.
+     - **Create :** il ne déplace pas les tiroirs de FS, que FS met dans `c:relocation_not_supported`.
+       Un tiroir d'Immaterial Drawers, lui, bouge sans duplication.
+       - En STRICT, il est délié à distance et n'est **pas** relié à nouveau au retour, puisqu'aucun
+         joueur ne l'a posé.
+       - En ASSIST, il reste relié.
+     - **Client sans le mod :** refusé proprement (`runClientWithoutMod`).
+14. Docs publiques, page CurseForge, release. Annoncer le mod sur `Buuz135/FunctionalStorage#353`.
 
 Avant la tâche 1, **proposer l'option en amont** (issue ou PR sur `Buuz135/FunctionalStorage`) : si
 FS l'intègre, ce mod n'a pas besoin d'exister. Voir `DESIGN.md` §2.
