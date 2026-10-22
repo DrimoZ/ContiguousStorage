@@ -213,6 +213,25 @@ scénario tout seul dans un vrai client, sur le monde `run/saves/scenario` (mond
   - **le trim encadré habillé s'affiche avec son habillage en main et dans la barre d'inventaire.**
     La limite prévue par la session des trims ne se produit pas.
 
+### Résultats du 22 octobre 2026 — 26.1.2 (branche `26.1`)
+
+Monde plat neuf, dans `run-26.1/saves/scenario`. Les étapes I, K et M ne sont pas jouées : ni Create
+ni Immaterial Drawers n'existent en 26.1.
+
+- **Phase 1 : 54 réussis, 0 échoué. Phase 2 : 13 réussis, 0 échoué.**
+- **W (gel #314) :** l'écart maximal entre deux ticks du client est de 69 ms pour le mur de planches et
+  de 68 ms pour le mur de tiroirs. Aucun écart ne dépasse 100 ms.
+- **Captures** (`run-26.1/screenshots/scenario_*.png`) :
+  - les trims chêne et sapin ont leur bûche en cadre et leurs planches au centre ;
+  - le trim encadré habillé a son cadre en diamant et son centre en or, posé, en main et dans la
+    barre, et il reste identique après le rechargement ;
+  - le trim encadré nu montre le damier de FS. **Écart avec 1.21.1 :** son centre porte la texture
+    `framed_front_1` (damier et diagonale cyan). FS 26.1 choisit la matière d'une face d'après cette
+    texture, donc l'écart est inévitable ;
+  - « 3 drawer(s) disconnected » et la fumée apparaissent à la coupure.
+- **Corrigé pendant le passage :** en 26.1, un mod est construit avant `Minecraft.getInstance()`. Le
+  pilote du scénario est donc créé au `FMLClientSetupEvent`.
+
 ### Résultats du 21 octobre 2026, scénario étendu (Z, I, K, M, W), Create 6.0.10 et Immaterial Drawers 0.2.1
 
 - **Phase 1 : 67 réussis, 0 échoué. Phase 2 : 13 réussis, 0 échoué.**

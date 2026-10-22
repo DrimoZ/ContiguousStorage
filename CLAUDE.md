@@ -663,8 +663,8 @@ et Immaterial Drawers n'a pas de build 26.1. Un client démarre sans erreur de r
     test functions, en test instances, et en un environnement par batch.
 - **Retiré de la branche :** le mixin, `LogoRender` et `Showcase` (ce qu'ils produisent ne dépend pas
   de la version), et les étapes Create et Immaterial Drawers du scénario client.
-- **Pas encore vérifié en jeu :** le rendu des trims, l'habillage du trim encadré (bloc et item), et le
-  scénario `-Pscenario`. Il faut d'abord un monde plat `run-26.1/saves/scenario`.
+- **[vérifié] en jeu le 22 octobre 2026 :** scénario complet, phase 1 à 54/54 et phase 2 à 13/13, rendu des
+  trims compris (`MANUAL_TESTS.md`). Le pilote est créé au `FMLClientSetupEvent`, pas dans le constructeur.
 
 ---
 
