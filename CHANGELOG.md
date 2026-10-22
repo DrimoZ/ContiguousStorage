@@ -3,7 +3,7 @@
 **What this file is:** what changed in each release, newest first. **What it is not:** the plan
 (`ROADMAP.md`) or the full feature list (`README.md`).
 
-## 0.1.0+1.20.1 — unreleased
+## 0.1.0+1.20.1 — 2026-10-22
 
 The same mod as 0.1.0+1.21.1, ported to Minecraft 1.20.1 and Forge.
 
