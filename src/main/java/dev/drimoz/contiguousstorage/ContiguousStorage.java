@@ -2,6 +2,7 @@ package dev.drimoz.contiguousstorage;
 
 import dev.drimoz.contiguousstorage.block.CSBlocks;
 import dev.drimoz.contiguousstorage.block.TrimPack;
+import dev.drimoz.contiguousstorage.gametest.CSGameTestRegistry;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -19,5 +20,6 @@ public final class ContiguousStorage {
         modBus.addListener(EventPriority.LOWEST, CSBlocks::register);
         modBus.addListener(TrimPack::addPacks);
         modBus.addListener(CSBlocks::fillCreativeTabs);
+        CSGameTestRegistry.register(modBus);
     }
 }

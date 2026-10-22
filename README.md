@@ -4,7 +4,7 @@
 and pack makers. **What it is not:** the design notes (`DESIGN.md`, in French), the build brief
 (`CLAUDE.md`) or the store page (`STORE.md`).
 
-An addon for [Functional Storage](https://modrinth.com/mod/functional-storage) on NeoForge 1.21.1.
+An addon for [Functional Storage](https://modrinth.com/mod/functional-storage) on NeoForge 26.1.2.
 A drawer joins a Storage Controller's network by **touching** it, directly or through a chain of
 drawers and trims, as in Storage Drawers. Place a drawer against your wall and it is linked; break the
 middle of a chain and, if you want, the far side is cut off.
@@ -84,7 +84,8 @@ unlink. It works in any mode and changes nothing. It returns the drawer count, s
 
 - **Both client and server** need the mod: it registers the trims. A client without it is refused
   with NeoForge's *"registries with unknown keys … contiguousstorage:…_trim"*.
-- Needs NeoForge 21.1 for Minecraft 1.21.1, Functional Storage 1.21-1.5.7 or newer, and Titanium.
+- Needs NeoForge 26.1.2 for Minecraft 26.1.2, Functional Storage 26.1-1.6.4 or newer, and Titanium.
+  For Minecraft 1.21.1, see the `1.21.1` branch.
 
 ## Known limits
 
@@ -96,10 +97,6 @@ unlink. It works in any mode and changes nothing. It returns the drawer count, s
 - **Only players link by placement.** A drawer put back by a Create contraption, a deployer or any
   other machine is not linked when it lands against a network. Link it with the Linking Tool, or
   break it and place it again.
-- **Create.** Create cannot move Functional Storage's own drawers or controller: Functional Storage
-  forbids it. Addon drawers it can move (Immaterial Drawers', for example) move without duplication.
-  In `STRICT` they are unlinked once moved away, and not linked again when brought back, as above. In
-  `ASSIST` they stay linked.
 - **Big networks are slow in Functional Storage itself.** This mod keeps an index of every network,
   so its own work stays small:
   - placing a drawer costs about what Functional Storage's own linking costs;
@@ -110,13 +107,6 @@ unlink. It works in any mode and changes nothing. It returns the drawer count, s
   or unlink rebuilds its whole list: about 2 ms at 2,000 drawers, 15 ms at 20,000. Linking 20,000
   free drawers at once takes seconds. Its controller inventory checks every access against the full
   drawer list. Very large networks are best split across several controllers.
-
-## Functional Storage 1.5.7 load freeze
-
-Functional Storage 1.5.7 can freeze a server while loading a world, when a drawer is linked from
-another chunk than its controller. Auto-link makes that more common. Functional Storage has fixed it
-on its development branch. This mod applies that same fix to **Functional Storage 1.5.7 and older
-only**, through one small mixin, and leaves newer versions alone.
 
 ## License
 

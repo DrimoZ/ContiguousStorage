@@ -1,14 +1,14 @@
 plugins {
     id 'java-library'
     // Pinned to the version Functional Storage itself builds with.
-    id 'net.neoforged.moddev' version '2.0.75'
+    id 'net.neoforged.moddev' version '2.0.143'
 }
 
 version = "${mod_version}+${minecraft_version}"
 group = mod_group_id
 base { archivesName = mod_id }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 // src/gametest: a dev-only mod present in dev runs, never in the jar - see neoForge.mods. Its data
 // (test tags) and the in-game scenario driver (./gradlew runClient -Pscenario, MANUAL_TESTS.md).
@@ -23,33 +23,19 @@ configurations {
 }
 
 neoForge {
+    // 26.1 ships unobfuscated, with Mojang's own parameter names: no Parchment.
     version = project.neo_version
-
-    parchment {
-        minecraftVersion = project.parchment_minecraft_version
-        mappingsVersion = project.parchment_mappings_version
-    }
 
     runs {
         client {
             client()
-            gameDirectory = project.file('run')
+            gameDirectory = project.file('run-26.1')
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
             // -Pscenario: opens the world "scenario" and lets the dev-only driver play the manual
             // test scenario by itself (src/gametest, ClientScenario).
             if (project.hasProperty('scenario')) {
                 programArguments.addAll '--quickPlaySingleplayer', 'scenario'
                 systemProperty 'contiguousstorage.scenario', 'true'
-            }
-            // -Plogo: renders the logo from the real blocks into run/logo/logo.png (LogoRender).
-            if (project.hasProperty('logo')) {
-                programArguments.addAll '--quickPlaySingleplayer', 'scenario'
-                systemProperty 'contiguousstorage.logo', 'true'
-            }
-            // -Pshowcase: builds the store page's scenes and captures them into run/store-screenshots (Showcase).
-            if (project.hasProperty('showcase')) {
-                programArguments.addAll '--quickPlaySingleplayer', 'scenario', '--width', '1920', '--height', '1080'
-                systemProperty 'contiguousstorage.showcase', 'true'
             }
         }
         // A client with Functional Storage but not this mod, joining runServer: it must be turned
@@ -63,7 +49,7 @@ neoForge {
         }
         server {
             server()
-            gameDirectory = project.file('run')
+            gameDirectory = project.file('run-26.1')
             programArgument '--nogui'
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
         }
@@ -113,10 +99,6 @@ dependencies {
     implementation "maven.modrinth:functional-storage:${functionalstorage_version}"
 
     runtimeOnly "maven.modrinth:jade:${jade_version}"
-    // Dev run only: the scenario moves a linked drawer with a Create contraption. -PnoCreate leaves it out.
-    if (!project.hasProperty('noCreate')) {
-        runtimeOnly "maven.modrinth:create:${create_version}"
-    }
 
     gametestImplementation sourceSets.main.output
 
@@ -159,6 +141,6 @@ tasks.named('jar', Jar) {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 21
+    options.release = 25
     options.compilerArgs << '-Xlint:deprecation'
 }

@@ -12,7 +12,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.ChunkPos;
@@ -39,7 +39,7 @@ public final class NetworkWalker {
 
     /** Blocks that carry a network without being linked to it. Ships Storage Drawers' trims; packs add to it. */
     public static final TagKey<Block> CONDUCTORS =
-            TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(ContiguousStorage.MOD_ID, "conductors"));
+            TagKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(ContiguousStorage.MOD_ID, "conductors"));
 
     static final Direction[] DIRECTIONS = Direction.values();
 
@@ -88,7 +88,7 @@ public final class NetworkWalker {
                 if (!range.contains(cursor.getX() + 0.5, cursor.getY() + 0.5, cursor.getZ() + 0.5)) {
                     continue;
                 }
-                LevelChunk chunk = chunks.apply(ChunkPos.asLong(cursor));
+                LevelChunk chunk = chunks.apply(ChunkPos.pack(cursor));
                 if (chunk == null) {
                     return null;
                 }

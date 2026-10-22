@@ -8,10 +8,12 @@ import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * The trims: one per wood Functional Storage makes drawers of, and a framed one.
@@ -53,8 +56,8 @@ public final class CSBlocks {
         return all;
     }
 
-    public static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(ContiguousStorage.MOD_ID, path);
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(ContiguousStorage.MOD_ID, path);
     }
 
     public static void register(RegisterEvent event) {
@@ -64,20 +67,31 @@ public final class CSBlocks {
                     continue;
                 }
                 try {
-                    TrimBlock trim = new TrimBlock(BlockBehaviour.Properties.ofFullCopy(wood.getPlanks()));
-                    helper.register(id(wood.getName() + "_trim"), trim);
+                    Identifier name = id(wood.getName() + "_trim");
+                    TrimBlock trim = new TrimBlock(BlockBehaviour.Properties.ofFullCopy(wood.getPlanks()).setId(ResourceKey.create(Registries.BLOCK, name)));
+                    helper.register(name, trim);
                     WOOD_TRIMS.put(trim, wood);
                 } catch (RuntimeException e) {
                     LOGGER.warn("No trim for Functional Storage wood {}: {}", wood.getName(), e.toString());
                 }
             }
-            FRAMED_TRIM = new FramedTrimBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS));
+            FRAMED_TRIM = new FramedTrimBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)
+                    .setId(ResourceKey.create(Registries.BLOCK, id("framed_trim"))));
             helper.register(id("framed_trim"), FRAMED_TRIM);
+            // FS lists its framed blocks - the ones whose model it dresses - at the lowest priority of this
+            // same event, which reaches FS before this mod: the list is already built without the trim.
+            if (FunctionalStorage.FRAMED_BLOCKS != null && !FunctionalStorage.FRAMED_BLOCKS.contains(FRAMED_TRIM)) {
+                FunctionalStorage.FRAMED_BLOCKS = Stream.concat(FunctionalStorage.FRAMED_BLOCKS.stream(), Stream.of((Block) FRAMED_TRIM)).toList();
+            }
         });
         event.register(Registries.ITEM, helper ->
-                all().forEach(trim -> helper.register(BuiltInRegistries.BLOCK.getKey(trim), new BlockItem(trim, new Item.Properties()))));
+                all().forEach(trim -> {
+                    Identifier name = BuiltInRegistries.BLOCK.getKey(trim);
+                    helper.register(name, new BlockItem(trim, new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, name)).useBlockDescriptionPrefix()));
+                }));
         event.register(Registries.BLOCK_ENTITY_TYPE, helper -> {
-            FRAMED_TRIM_TILE = BlockEntityType.Builder.of(FramedTrimTile::new, FRAMED_TRIM).build(null);
+            FRAMED_TRIM_TILE = new BlockEntityType<>(FramedTrimTile::new, FRAMED_TRIM);
             helper.register(id("framed_trim"), FRAMED_TRIM_TILE);
         });
     }
@@ -85,7 +99,7 @@ public final class CSBlocks {
     /** In Functional Storage's tab and in Building Blocks - unless trims are turned off. */
     public static void fillCreativeTabs(BuildCreativeModeTabContentsEvent event) {
         boolean ours = event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS
-                || event.getTabKey().location().equals(FunctionalStorage.TAB.getResourceLocation());
+                || event.getTabKey().identifier().equals(FunctionalStorage.TAB.getIdentifier());
         if (ours && CSConfig.TRIMS_ENABLED.get()) {
             all().forEach(event::accept);
         }

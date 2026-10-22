@@ -3,6 +3,18 @@
 **What this file is:** what changed in each release, newest first. **What it is not:** the plan
 (`ROADMAP.md`) or the full feature list (`README.md`).
 
+## 0.1.0+26.1.2 — unreleased
+
+The same mod as 0.1.0+1.21.1, ported to Minecraft 26.1.2.
+
+### Changed
+- Built for NeoForge 26.1.2 and Functional Storage 26.1-1.6.4 or newer, on Java 25.
+- The framed trim is dressed by Functional Storage 26.1's own framed model, like its framed drawers.
+- No more backport of Functional Storage's load freeze fix: Functional Storage 26.1 ships the fix.
+
+### Notes
+- Not tested with Immaterial Drawers or Create, which have no 26.1 version yet.
+
 ## 0.1.0+1.21.1 — 2026-10-22
 
 ### Added

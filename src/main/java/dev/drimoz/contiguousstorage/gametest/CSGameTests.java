@@ -26,18 +26,18 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.item.Items;
 import com.buuz135.functionalstorage.item.component.SizeProvider;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.gametest.framework.AfterBatch;
-import net.minecraft.gametest.framework.BeforeBatch;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -47,6 +47,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.minecraft.network.chat.Component;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.world.level.ChunkPos;
@@ -61,8 +62,6 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -86,8 +85,6 @@ import java.util.stream.IntStream;
  *
  * <p>Run with {@code ./gradlew runGameTestServer}.
  */
-@GameTestHolder(ContiguousStorage.MOD_ID)
-@PrefixGameTestTemplate(false)
 public final class CSGameTests {
 
     /** src/main/resources/data/contiguousstorage/structure/wall.nbt - 11 x 5 x 11, empty above the floor. */
@@ -140,12 +137,12 @@ public final class CSGameTests {
                     // controllerPos untouched. Only a test may edit the list by hand.
                     controller.getConnectedDrawers().getConnectedDrawers().remove(Long.valueOf(drawerAbs.asLong()));
                     helper.assertFalse(inList(controller, drawerAbs), "drawer still in the list");
-                    before[0] = helper.getBlockEntity(DRAWER);
+                    before[0] = blockEntity(helper, DRAWER);
                     reloadFromSave(helper, DRAWER);
                 })
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
-                    helper.assertTrue(helper.getBlockEntity(DRAWER) != before[0],
+                    helper.assertTrue(blockEntity(helper, DRAWER) != before[0],
                             "the block entity was not replaced - the reload simulation did nothing");
                     helper.assertTrue(inList(controller, drawerAbs),
                             "FS's onLoad did not relink a drawer that kept its controllerPos. Either "
@@ -225,7 +222,7 @@ public final class CSGameTests {
 
     private static LongFunction<LevelChunk> chunks(GameTestHelper helper, BlockPos unloaded) {
         LongFunction<LevelChunk> loaded = NetworkWalker.loadedChunks(helper.getLevel());
-        long hidden = unloaded == null ? Long.MIN_VALUE : ChunkPos.asLong(unloaded);
+        long hidden = unloaded == null ? Long.MIN_VALUE : ChunkPos.pack(unloaded);
         return key -> key == hidden ? null : loaded.apply(key);
     }
 
@@ -410,7 +407,7 @@ public final class CSGameTests {
                 })
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
-                    StorageControllerTile<?> second = helper.getBlockEntity(secondPos);
+                    StorageControllerTile<?> second = blockEntity(helper, secondPos);
                     assertLinked(helper, second, againstSecond, true, "placed against the second controller only");
                     assertLinked(helper, first, againstShared, true, "placed against the first controller's drawer");
                     assertLinked(helper, first, shared, true, "at the end");
@@ -421,7 +418,7 @@ public final class CSGameTests {
                     helper.setBlock(free, drawerBlock());
                     helper.assertValueEqual(Networks.linkFree(second, chunks(helper, null)), 0,
                             "drawers the second controller linked through the first one's drawer");
-                    ControllableDrawerTile<?> freeDrawer = helper.getBlockEntity(free);
+                    ControllableDrawerTile<?> freeDrawer = blockEntity(helper, free);
                     helper.assertTrue(freeDrawer.getControllerPos() == null, "the free drawer was linked across");
                 })
                 .thenSucceed();
@@ -434,7 +431,7 @@ public final class CSGameTests {
      */
     @GameTest(template = WALL, required = false)
     public static void anAddonDrawerConductsAndLinks(GameTestHelper helper) {
-        Block addonDrawer = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("immaterialdrawers", "energy_drawer"));
+        Block addonDrawer = BuiltInRegistries.BLOCK.getValue(Identifier.fromNamespaceAndPath("immaterialdrawers", "energy_drawer"));
         if (addonDrawer == Blocks.AIR) {
             helper.fail("Immaterial Drawers is not in the run - build it next door to enable this test");
         }
@@ -512,7 +509,7 @@ public final class CSGameTests {
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
-                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    StorageControllerTile<?> controller = blockEntity(helper, EDGE_CONTROLLER);
                     CHAIN.forEach(pos -> assertLinked(helper, controller, pos, true, "after the controller was placed against the chain"));
                 })
                 .thenWaitUntil(() -> helper.assertTrue(helper.getLevel().getGameTime() % interval == 1,
@@ -520,14 +517,14 @@ public final class CSGameTests {
                 .thenExecute(() -> helper.getLevel().setBlock(helper.absolutePos(CHAIN.get(2)), Blocks.AIR.defaultBlockState(), 2))
                 .thenIdle(interval - 4)
                 .thenExecute(() -> {
-                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    StorageControllerTile<?> controller = blockEntity(helper, EDGE_CONTROLLER);
                     for (BlockPos pos : CHAIN.subList(3, 6)) {
                         assertLinked(helper, controller, pos, true, "before the safety net's next pass - something else saw the silent cut");
                     }
                 })
                 .thenIdle(5)
                 .thenExecute(() -> {
-                    StorageControllerTile<?> controller = helper.getBlockEntity(EDGE_CONTROLLER);
+                    StorageControllerTile<?> controller = blockEntity(helper, EDGE_CONTROLLER);
                     for (BlockPos pos : CHAIN.subList(0, 2)) {
                         assertLinked(helper, controller, pos, true, "on the near side after the safety net");
                     }
@@ -555,7 +552,7 @@ public final class CSGameTests {
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
-                    StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
+                    StorageControllerTile<?> controller = blockEntity(helper, CONTROLLER);
                     wall.forEach(pos -> assertLinked(helper, controller, pos, true, "once the wall has settled"));
                     before[0] = Networks.validations;
                     before[1] = Networks.quickChecks;
@@ -567,7 +564,7 @@ public final class CSGameTests {
                     helper.assertTrue(checks >= idle / interval,
                             checks + " safety net checks in " + idle + " ticks - the safety net never ran, so this test proves nothing");
                     helper.assertValueEqual(walks, 0L, "walks of an intact wall while idling (the index answers the safety net)");
-                    StorageControllerTile<?> controller = helper.getBlockEntity(CONTROLLER);
+                    StorageControllerTile<?> controller = blockEntity(helper, CONTROLLER);
                     wall.forEach(pos -> assertLinked(helper, controller, pos, true, "after idling"));
                 })
                 .thenSucceed();
@@ -610,7 +607,7 @@ public final class CSGameTests {
     @GameTest(template = WALL, batch = SWITCH_FROM_OFF, timeoutTicks = 400)
     public static void aControllerPlacedWhileOffIsCheckedAfterSwitchingToStrict(GameTestHelper helper) {
         placeAsPlayer(helper, FunctionalStorage.DRAWER_CONTROLLER.getBlock(), EDGE_CONTROLLER);
-        distantLinkThenSwitchToStrict(helper, helper.getBlockEntity(EDGE_CONTROLLER));
+        distantLinkThenSwitchToStrict(helper, blockEntity(helper, EDGE_CONTROLLER));
     }
 
     private static void distantLinkThenSwitchToStrict(GameTestHelper helper, StorageControllerTile<?> controller) {
@@ -738,7 +735,7 @@ public final class CSGameTests {
     /** What {@code ServerPlayerGameMode.destroyBlock} does: the event, then the break. */
     private static void breakAsPlayer(GameTestHelper helper, BlockPos pos, Player player) {
         BlockPos abs = helper.absolutePos(pos);
-        NeoForge.EVENT_BUS.post(new BlockEvent.BreakEvent(helper.getLevel(), abs, helper.getLevel().getBlockState(abs), player));
+        NeoForge.EVENT_BUS.post(new BreakBlockEvent(helper.getLevel(), abs, helper.getLevel().getBlockState(abs), player));
         helper.destroyBlock(pos);
     }
 
@@ -748,21 +745,16 @@ public final class CSGameTests {
         final List<String> messages = new ArrayList<>();
 
         ListeningPlayer(Level level) {
-            super(level, BlockPos.ZERO, 0.0F, new GameProfile(UUID.randomUUID(), "test-listening-player"));
+            super(level, new GameProfile(UUID.randomUUID(), "test-listening-player"));
         }
 
         @Override
-        public boolean isSpectator() {
-            return false;
+        public GameType gameMode() {
+            return GameType.SURVIVAL;
         }
 
         @Override
-        public boolean isCreative() {
-            return false;
-        }
-
-        @Override
-        public void displayClientMessage(Component message, boolean actionBar) {
+        public void sendOverlayMessage(Component message) {
             messages.add(message.getString());
         }
     }
@@ -821,7 +813,7 @@ public final class CSGameTests {
             }
         };
         return new CommandSourceStack(listener, Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO)), Vec2.ZERO,
-                helper.getLevel(), Commands.LEVEL_OWNERS, "contiguousstorage-test", Component.literal("test"),
+                helper.getLevel(), PermissionSet.ALL_PERMISSIONS, "contiguousstorage-test", Component.literal("test"),
                 helper.getLevel().getServer(), null);
     }
 
@@ -1046,7 +1038,7 @@ public final class CSGameTests {
                         level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
                     }
                     level.setBlock(controllerPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
-                    forced.forEach(chunk -> level.setChunkForced(chunk.x, chunk.z, false));
+                    forced.forEach(chunk -> level.setChunkForced(chunk.x(), chunk.z(), false));
                 })
                 .thenSucceed();
     }
@@ -1131,25 +1123,25 @@ public final class CSGameTests {
      */
     @GameTest(template = WALL)
     public static void theGeneratedPackHasEverything(GameTestHelper helper) {
-        Map<ResourceLocation, byte[]> client = TrimPack.contents(PackType.CLIENT_RESOURCES, true);
-        Map<ResourceLocation, byte[]> server = TrimPack.contents(PackType.SERVER_DATA, true);
-        Map<ResourceLocation, byte[]> serverOff = TrimPack.contents(PackType.SERVER_DATA, false);
+        Map<Identifier, byte[]> client = TrimPack.contents(PackType.CLIENT_RESOURCES, true);
+        Map<Identifier, byte[]> server = TrimPack.contents(PackType.SERVER_DATA, true);
+        Map<Identifier, byte[]> serverOff = TrimPack.contents(PackType.SERVER_DATA, false);
         String lang = new String(client.get(CSBlocks.id("lang/en_us.json")), java.nio.charset.StandardCharsets.UTF_8);
         for (Block trim : CSBlocks.all()) {
             String name = BuiltInRegistries.BLOCK.getKey(trim).getPath();
-            for (String path : List.of("blockstates/" + name + ".json", "models/block/" + name + ".json", "models/item/" + name + ".json")) {
+            for (String path : List.of("blockstates/" + name + ".json", "models/block/" + name + ".json", "items/" + name + ".json")) {
                 helper.assertTrue(client.containsKey(CSBlocks.id(path)), "missing from the client pack: " + path);
             }
             helper.assertTrue(lang.contains("block.contiguousstorage." + name), "no name for " + name);
             helper.assertTrue(server.containsKey(CSBlocks.id("loot_table/blocks/" + name + ".json")), "no loot table for " + name);
             helper.assertTrue(serverOff.containsKey(CSBlocks.id("loot_table/blocks/" + name + ".json")), "no loot table for " + name + " with trims off");
             helper.assertTrue(server.containsKey(CSBlocks.id("recipe/" + name + ".json")), "no recipe for " + name);
-            helper.assertTrue(helper.getLevel().getRecipeManager().byKey(CSBlocks.id(name)).isPresent(),
+            helper.assertTrue(helper.getLevel().recipeAccess().byKey(ResourceKey.create(Registries.RECIPE, CSBlocks.id(name))).isPresent(),
                     "the server did not load the recipe of " + name + " - is the generated pack registered?");
         }
         helper.assertTrue(lang.contains("Dark Oak Trim"), "names are not titled: " + lang);
         helper.assertTrue(serverOff.keySet().stream().noneMatch(path -> path.getPath().startsWith("recipe/")), "recipes with trims off");
-        helper.assertTrue(server.containsKey(ResourceLocation.withDefaultNamespace("tags/block/mineable/axe.json")), "no axe tag");
+        helper.assertTrue(server.containsKey(Identifier.withDefaultNamespace("tags/block/mineable/axe.json")), "no axe tag");
         helper.succeed();
     }
 
@@ -1170,15 +1162,18 @@ public final class CSGameTests {
      */
     @GameTest(template = WALL)
     public static void theFramedTrimTakesFunctionalStoragesFramedRecipe(GameTestHelper helper) {
+        // On 26.1 FS dresses the model of every block in this list, built when blocks are registered.
+        helper.assertTrue(FunctionalStorage.FRAMED_BLOCKS.contains(CSBlocks.FRAMED_TRIM),
+                "Functional Storage did not list the framed trim among its framed blocks - it would render undressed");
         CraftingInput input = CraftingInput.of(3, 1, List.of(new ItemStack(Blocks.STONE), new ItemStack(Blocks.OAK_PLANKS), new ItemStack(CSBlocks.FRAMED_TRIM)));
         FramedDrawerRecipe recipe = new FramedDrawerRecipe();
         helper.assertTrue(recipe.matches(input, helper.getLevel()), "Functional Storage's framed recipe does not take the framed trim");
-        ItemStack dressed = recipe.assemble(input, helper.getLevel().registryAccess());
+        ItemStack dressed = recipe.assemble(input);
         helper.assertTrue(dressed.has(FSAttachments.STYLE.get()), "the framed recipe gave no style");
 
         BlockPos pos = new BlockPos(5, 2, 5);
         placeStackAsPlayer(helper, dressed, pos);
-        FramedTrimTile tile = helper.getBlockEntity(pos);
+        FramedTrimTile tile = blockEntity(helper, pos);
         helper.assertValueEqual(tile.getFramedDrawerModelData().getDesign().get("side"), Items.STONE, "frame of the placed framed trim");
         helper.assertValueEqual(tile.getFramedDrawerModelData().getDesign().get("front"), Items.OAK_PLANKS, "core of the placed framed trim");
 
@@ -1202,7 +1197,7 @@ public final class CSGameTests {
         helper.assertFalse(Blocks.OAK_PLANKS.defaultBlockState().is(NetworkWalker.CONDUCTORS), "planks are a conductor");
         // The shipped tag lists Storage Drawers' trims as optional entries, and Storage Drawers is not
         // in the run. Had one of them failed the load, the whole tag would be gone, copper with it.
-        helper.assertValueEqual(BuiltInRegistries.BLOCK.getTag(NetworkWalker.CONDUCTORS).map(HolderSet.Named::size).orElse(0), 1,
+        helper.assertValueEqual(BuiltInRegistries.BLOCK.get(NetworkWalker.CONDUCTORS).map(HolderSet.Named::size).orElse(0), 1,
                 "blocks in #contiguousstorage:conductors (the shipped tag merged with the test one, trims skipped)");
         StorageControllerTile<?> controller = placeController(helper, EDGE_CONTROLLER);
         helper.setBlock(new BlockPos(1, 1, 5), Blocks.COPPER_BLOCK);
@@ -1290,6 +1285,12 @@ public final class CSGameTests {
         return controller;
     }
 
+    /** The block entity at a relative position, as {@code helper.getBlockEntity(pos)} was before 1.21.5. */
+    @SuppressWarnings("unchecked")
+    private static <T extends BlockEntity> T blockEntity(GameTestHelper helper, BlockPos pos) {
+        return (T) helper.getLevel().getBlockEntity(helper.absolutePos(pos));
+    }
+
     private static boolean isDrawer(GameTestHelper helper, BlockPos pos) {
         return helper.getLevel().getBlockEntity(helper.absolutePos(pos)) instanceof ControllableDrawerTile<?>;
     }
@@ -1300,7 +1301,7 @@ public final class CSGameTests {
 
     private static StorageControllerTile<?> placeController(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, FunctionalStorage.DRAWER_CONTROLLER.getBlock());
-        BlockEntity be = helper.getBlockEntity(pos);
+        BlockEntity be = blockEntity(helper, pos);
         helper.assertTrue(be instanceof StorageControllerTile<?>, "no Storage Controller was placed");
         return (StorageControllerTile<?>) be;
     }
@@ -1327,7 +1328,7 @@ public final class CSGameTests {
     private static void assertLinked(GameTestHelper helper, StorageControllerTile<?> controller, BlockPos pos,
                                      boolean expected, String when) {
         BlockPos drawerAbs = helper.absolutePos(pos);
-        ControllableDrawerTile<?> drawer = helper.getBlockEntity(pos);
+        ControllableDrawerTile<?> drawer = blockEntity(helper, pos);
         helper.assertValueEqual(inList(controller, drawerAbs), expected, "drawer " + pos + " in controller list " + when);
         helper.assertValueEqual(controller.getBlockPos().equals(drawer.getControllerPos()), expected,
                 "drawer " + pos + " controllerPos points at the controller " + when);

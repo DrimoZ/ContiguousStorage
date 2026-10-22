@@ -559,6 +559,8 @@ Les étapes 9 à 13 viennent de l'étude du 16 octobre 2026 (`IDEAS.md` §5, dé
        - En ASSIST, il reste relié.
      - **Client sans le mod :** refusé proprement (`runClientWithoutMod`).
 14. Docs publiques, page CurseForge, release. Annoncer le mod sur `Buuz135/FunctionalStorage#353`.
+   - **Fait** le 22 octobre 2026 : 0.1.0 sur Modrinth et CurseForge, tag `v0.1.0+1.21.1`.
+     **Pas de release GitHub**, décidé : les deux plateformes suffisent.
 
 Avant la tâche 1, **proposer l'option en amont** (issue ou PR sur `Buuz135/FunctionalStorage`) : si
 FS l'intègre, ce mod n'a pas besoin d'exister. Voir `DESIGN.md` §2.
@@ -610,10 +612,59 @@ Chaque fichier a un seul métier et l'annonce en ouverture, y compris ce qu'il n
 | Cible | Ce qui change | État |
 |---|---|---|
 | 1.20.1 (Forge 47, FS 1.20.1-1.2.14) | Forge, pas NeoForge. Événements équivalents à retrouver (`BlockEvent.NeighborNotifyEvent` existe sur Forge). | **[à vérifier]** que `addConnectedDrawers`, `controllerPos` et l'auto-réparation au chargement existent sous cette forme dans FS 1.2.14. |
-| 26.1 (NeoForge 26.1, FS 26.1-1.6.1) | Java 25. | **[à vérifier]** idem. |
+| 26.1 (NeoForge 26.1.2, FS 26.1-1.6.4) | Java 25. | **Fait** le 22 octobre 2026, branche `26.1` (voir plus bas). |
 
 Un mod sans bloc ni asset se porte vite, **à condition** que l'API de linking de FS soit la même. C'est
 la première chose à lire sur chaque branche, avant d'estimer quoi que ce soit.
+
+**[lu] le 22 octobre 2026**, branches `main` (1.20.1-1.2.14) et `26.1.2` (1.6.4) de FS. Sur les deux, la
+version de la branche est celle du jar publié, donc pas d'avance comme en 1.21. Ce n'est pas encore
+lu dans les jars eux-mêmes.
+- **Pareil partout :** `addConnectedDrawers(ActionMode, BlockPos...)`, `controllerPos`,
+  `setControllerPos` (avec un `REMOVE` bloquant à l'ancien contrôleur), `clearControllerPos`, un
+  `REMOVE` complet, `onLoad` qui relie à nouveau, et `rebuild()` qui retire les tiroirs non chargés.
+  Le cœur du mod se porte tel quel.
+- **1.20.1 :**
+  - La portée vaut `DRAWER_CONTROLLER_LINKING_RANGE + mult`, avec `mult == 1 → 0`, et
+    `getStorageMultiplier()` rend un `int`. Le test de portée du walker est à réécrire avec cette formule.
+  - `onLoad` fait un `getBlockEntity` bloquant **sans** garde `isLoaded`, et remet `controllerPos` à
+    `null` si la cible n'est pas un contrôleur. C'est probablement le deadlock de 1.5.7, peut-être pire
+    **[à vérifier]**. Le mixin est sans doute à porter.
+  - Le Linking Tool garde le contrôleur en NBT (`NBT_CONTROLLER`, X/Y/Z), pas en data component.
+  - Pas de `FramedTile` : le trim encadré est à refaire. On y passe à Forge 47, à `ForgeConfigSpec` et
+    à Java 17.
+- **26.1 :**
+  - Même loader. La portée vaut `inflate(getStorageMultiplier())` avec un `float`, comme en 1.21.
+  - `onLoad`, `invalidateCapabilities` et `onChunkUnloaded` passent par `getLoadedChunk` : le correctif
+    du deadlock est livré, **pas de mixin**.
+  - Le coût est du côté de Minecraft et de NeoForge : les game tests, refondus en 1.21.5 en registre de
+    test instances **[à vérifier]**, l'API de transfert (`ResourceHandler`), Java 25.
+
+**Port 26.1 — fait le 22 octobre 2026**, branche `26.1`. Le `1.21.1` reste sur la branche `1.21.1`.
+**[vérifié]** : les 37 game tests requis passent sur 26.1.2. Seul le test 10 échoue, il est optionnel
+et Immaterial Drawers n'a pas de build 26.1. Un client démarre sans erreur de ressources.
+- **Build :** MDG `2.0.143`, Gradle `9.2.1`, foojay `1.0.0`, Java 25, sans Parchment (26.1 n'est pas
+  obfusqué). Les runs client et serveur passent dans `run-26.1/`, parce qu'un monde de `run/` ouvert
+  en 26.1 ne s'ouvre plus en 1.21.1.
+- **Le cœur n'a pas bougé.** `NetworkWalker`, `Networks` et les événements ont seulement changé de
+  noms : `ResourceLocation` devient `Identifier`, `ChunkPos.asLong` devient `pack`, `BreakEvent`
+  devient `BreakBlockEvent`, `displayClientMessage(…, true)` devient `sendOverlayMessage`.
+- **Pièges :**
+  - Un bloc ou un item enregistré à la main doit porter son id dans ses propriétés (`setId`), sinon
+    « Block id not set » au démarrage. Le compilateur ne le voit pas.
+  - Un item a besoin de `assets/<ns>/items/<nom>.json`. Une recette prend ses ingrédients en chaînes
+    (`"minecraft:stick"`, `"#c:nuggets/iron"`).
+  - Les tiroirs encadrés de FS 26.1 n'ont plus de loader. FS enveloppe le modèle de chaque bloc de
+    `FunctionalStorage.FRAMED_BLOCKS` et l'habille selon les textures marqueurs (`framed_side`,
+    `framed_front_*`). La liste est construite à la priorité la plus basse de l'enregistrement des
+    blocs, **avant** nos listeners : `CSBlocks` y ajoute donc le trim encadré.
+  - Les game tests sont des entrées de registre. `@GameTest`, `@BeforeBatch` et `@AfterBatch` sont
+    devenus nos propres annotations, avec les mêmes attributs. `CSGameTestRegistry` les transforme en
+    test functions, en test instances, et en un environnement par batch.
+- **Retiré de la branche :** le mixin, `LogoRender` et `Showcase` (ce qu'ils produisent ne dépend pas
+  de la version), et les étapes Create et Immaterial Drawers du scénario client.
+- **Pas encore vérifié en jeu :** le rendu des trims, l'habillage du trim encadré (bloc et item), et le
+  scénario `-Pscenario`. Il faut d'abord un monde plat `run-26.1/saves/scenario`.
 
 ---
 

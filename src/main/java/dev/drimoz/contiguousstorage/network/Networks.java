@@ -70,7 +70,7 @@ public final class Networks {
      */
     private record Report(Player player, String key, String fallback) {
         void send(int unlinked) {
-            player.displayClientMessage(Component.translatableWithFallback(key, fallback, unlinked), true);
+            player.sendOverlayMessage(Component.translatableWithFallback(key, fallback, unlinked));
         }
     }
 
@@ -115,7 +115,7 @@ public final class Networks {
         World world = world(level);
         ChunkPos unloaded = chunk.getPos();
         world.known.removeIf(pos -> {
-            if (new ChunkPos(pos).equals(unloaded)) {
+            if (ChunkPos.containing(pos).equals(unloaded)) {
                 dropTree(world, pos.asLong());
                 return true;
             }
@@ -259,7 +259,7 @@ public final class Networks {
         LongFunction<LevelChunk> chunks = NetworkWalker.loadedChunks(level);
         for (Iterator<BlockPos> it = world.known.iterator(); it.hasNext(); ) {
             BlockPos pos = it.next();
-            LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+            LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
             if (chunk == null) {
                 continue;
             }
@@ -354,7 +354,7 @@ public final class Networks {
                 }
                 return;
             }
-            LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+            LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
             if (chunk == null || !NetworkWalker.isMember(chunk, pos, pos)) {
                 return;
             }
@@ -419,7 +419,7 @@ public final class Networks {
             if (!range.contains(cursor.getX() + 0.5, cursor.getY() + 0.5, cursor.getZ() + 0.5)) {
                 continue;
             }
-            LevelChunk chunk = chunks.apply(ChunkPos.asLong(cursor));
+            LevelChunk chunk = chunks.apply(ChunkPos.pack(cursor));
             if (chunk == null) {
                 return false;
             }
@@ -521,7 +521,7 @@ public final class Networks {
     }
 
     private static boolean isConductor(BlockPos pos, LongFunction<LevelChunk> chunks) {
-        LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+        LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
         return chunk != null && NetworkWalker.isConductor(chunk.getBlockState(pos));
     }
 
@@ -598,7 +598,7 @@ public final class Networks {
         List<BlockPos> stray = new ArrayList<>();
         for (int cx = SectionPos.blockToSectionCoord(range.minX); cx <= SectionPos.blockToSectionCoord(range.maxX); cx++) {
             for (int cz = SectionPos.blockToSectionCoord(range.minZ); cz <= SectionPos.blockToSectionCoord(range.maxZ); cz++) {
-                LevelChunk chunk = chunks.apply(ChunkPos.asLong(cx, cz));
+                LevelChunk chunk = chunks.apply(ChunkPos.pack(cx, cz));
                 if (chunk == null) {
                     continue;
                 }
@@ -642,12 +642,12 @@ public final class Networks {
     /** Whether {@code member} still carries {@code controller}'s network: TRUE, FALSE, or null if not loaded. */
     private static @Nullable Boolean present(LongFunction<LevelChunk> chunks, long member, long controller) {
         BlockPos pos = BlockPos.of(member);
-        LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+        LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
         return chunk == null ? null : NetworkWalker.isMember(chunk, pos, BlockPos.of(controller));
     }
 
     private static @Nullable BlockEntity blockEntity(BlockPos pos, LongFunction<LevelChunk> chunks) {
-        LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+        LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
         return chunk == null ? null : chunk.getBlockEntities().get(pos);
     }
 
@@ -679,7 +679,7 @@ public final class Networks {
         int skipped = 0;
         int strays = 0;
         for (BlockPos pos : controllers) {
-            LevelChunk chunk = chunks.apply(ChunkPos.asLong(pos));
+            LevelChunk chunk = chunks.apply(ChunkPos.pack(pos));
             if (chunk == null) {
                 skipped++;
                 continue;

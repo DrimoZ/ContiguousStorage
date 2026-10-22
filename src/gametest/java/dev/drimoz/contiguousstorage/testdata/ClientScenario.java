@@ -13,7 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -146,7 +146,7 @@ final class ClientScenario {
             command("fill 195 -60 195 215 -50 225 air");
             run(() -> CSConfig.MODE.set(CSConfig.Mode.ASSIST));
             run(() -> CSConfig.TRIMS_ENABLED.set(true));
-            run(() -> mc.getSingleplayerServer().getPlayerList().op(player().getGameProfile()));
+            run(() -> mc.getSingleplayerServer().getPlayerList().op(new net.minecraft.server.players.NameAndId(player().getGameProfile())));
             give(SLOT_CONTROLLER, new ItemStack(FunctionalStorage.DRAWER_CONTROLLER.getBlock()));
             give(SLOT_DRAWER, new ItemStack(FunctionalStorage.DRAWER_TYPES.get(FunctionalStorage.DrawerType.X_1).get(0).getBlock(), 64));
             give(SLOT_TOOL, new ItemStack(FunctionalStorage.LINKING_TOOL.get()));
@@ -256,126 +256,7 @@ final class ClientScenario {
             give(SLOT_TOOL, new ItemStack(FunctionalStorage.LINKING_TOOL.get()));
         }, 1);
 
-        // Immaterial Drawers: an addon drawer carries the network and links, placed by a player.
-        BlockPos c6 = new BlockPos(200, Y, 240);
-        step("I (move)", () -> look(c6.offset(2, 0, 0)), 10);
-        step("I1 controller, Immaterial Drawers' energy drawer, then an FS drawer", () -> {
-            Item energy = item("immaterialdrawers:energy_drawer");
-            expectTrue("I1 Immaterial Drawers is in the run (immaterialdrawers:energy_drawer exists)", energy != Items.AIR);
-            give(SLOT_PLANKS, new ItemStack(energy, 16));
-            placeOnFloor(SLOT_CONTROLLER, c6);
-        }, 3);
-        step("I1 (energy drawer)", () -> placeOnFloor(SLOT_PLANKS, c6.offset(1, 0, 0)), 3);
-        step("I1 (FS drawer behind it)", () -> placeOnFloor(SLOT_DRAWER, c6.offset(2, 0, 0)), 4);
-        step("I2 check", () -> {
-            expect("I2 Immaterial Drawers' energy drawer placed against the controller is linked", c6.offset(1, 0, 0), c6, "linked");
-            expect("I2 the FS drawer reached only through the energy drawer is linked", c6.offset(2, 0, 0), c6, "linked");
-            closeUp(c6.offset(1, 0, 0));
-        }, 25);
-        step("I3 screenshot", () -> {
-            shot("I3_immaterial_drawers_in_a_network");
-            give(SLOT_PLANKS, new ItemStack(Items.OAK_PLANKS, 64));
-        }, 2);
-
-        // Create: a mechanical piston moves a linked drawer holding 32 diamonds, then brings it back.
-        BlockPos piston = new BlockPos(230, Y + 2, 200);
-        BlockPos moved = piston.above();
-        BlockPos c5 = moved.east();
-        step("K (move)", () -> look(piston), 10);
-        // Control: the same piston and motor with planks instead of a drawer. If the planks move and
-        // the drawer does not, Create refuses to move FS drawers; if nothing moves, the rig is wrong.
-        step("K0 control piston with planks", () -> {
-            command("setblock 236 -60 200 create:piston_extension_pole[facing=up]");
-            command("setblock 236 -59 200 create:piston_extension_pole[facing=up]");
-            command("setblock 236 -58 200 create:mechanical_piston[facing=up,axis_along_first=true]");
-            command("setblock 236 -57 200 minecraft:oak_planks");
-            command("setblock 237 -58 200 create:creative_motor[facing=west]");
-        }, 80);
-        step("K0 observe the control", () -> {
-            String column = onServer(() -> {
-                StringBuilder out = new StringBuilder();
-                for (int y = -58; y <= -53; y++) {
-                    out.append("y=").append(y).append(":").append(BuiltInRegistries.BLOCK.getKey(level().getBlockState(new BlockPos(236, y, 200)).getBlock()).getPath()).append(" ");
-                }
-                return out.toString();
-            });
-            log("OBS | K0 control, 4 s after its motor | " + column);
-        }, 2);
-        step("K1 piston, poles, controller", () -> {
-            command("setblock 230 -60 200 create:piston_extension_pole[facing=up]");
-            command("setblock 230 -59 200 create:piston_extension_pole[facing=up]");
-            command("setblock 230 -58 200 create:mechanical_piston[facing=up,axis_along_first=true]");
-            command("setblock 231 -57 200 functionalstorage:storage_controller");
-        }, 3);
-        step("K2 drawer placed on the piston, against the controller", () -> use(SLOT_DRAWER, piston, Direction.UP), 4);
-        step("K3 check and fill", () -> {
-            expect("K3 drawer on the piston, against the controller, is linked", moved, c5, "linked");
-            run(() -> ((com.buuz135.functionalstorage.block.tile.ItemControllableDrawerTile<?>) level().getBlockEntity(moved))
-                    .getStorage().insertItem(0, new ItemStack(Items.DIAMOND, 32), false));
-            observe("K3 before moving");
-        }, 2);
-        // A creative motor east of the piston, facing west, extends it (the K0 control shows it).
-        step("K4 motor on", () -> command("setblock 231 -58 200 create:creative_motor[facing=west]"), 100);
-        step("K5 observe", () -> {
-            observe("K5 five seconds after the motor");
-            shot("K5_create_piston_refuses_fs_drawer");
-            command("setblock 231 -58 200 air");
-        }, 2);
-
-        // Create with a drawer it can move: Immaterial Drawers' are not in FS's c:relocation_not_supported.
-        BlockPos mPiston = new BlockPos(242, Y + 2, 200);
-        BlockPos mDrawer = mPiston.above();
-        BlockPos c8 = mDrawer.east();
-        step("M1 piston, poles, controller", () -> {
-            command("setblock 242 -60 200 create:piston_extension_pole[facing=up]");
-            command("setblock 242 -59 200 create:piston_extension_pole[facing=up]");
-            command("setblock 242 -58 200 create:sticky_mechanical_piston[facing=up,axis_along_first=true]");
-            command("setblock 243 -57 200 functionalstorage:storage_controller");
-            give(SLOT_PLANKS, new ItemStack(item("immaterialdrawers:energy_drawer"), 4));
-        }, 3);
-        step("M (move)", () -> look(mPiston), 10);
-        step("M2 energy drawer placed on the piston, against the controller", () -> use(SLOT_PLANKS, mPiston, Direction.UP), 4);
-        step("M3 check and fill", () -> {
-            expect("M3 energy drawer on the piston, against the controller, is linked", mDrawer, c8, "linked");
-            run(() -> {
-                var energy = level().getCapability(net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, mDrawer, null);
-                if (energy != null) {
-                    energy.receiveEnergy(10_000, false);
-                }
-            });
-            observeMoved("M3 before moving", false);
-        }, 2);
-        // A sticky piston, so the drawer comes back. STRICT: two blocks away it must be cut; then ASSIST.
-        step("M4 STRICT: extend", () -> command("setblock 243 -58 200 create:creative_motor[facing=west]"), 220);
-        step("M4 observe, then retract", () -> {
-            observeMoved("M4 extended, two blocks from the controller (STRICT)", true);
-            expect("M4 STRICT: the drawer pushed two blocks from the controller is cut", mDrawer.above(2), c8, "free");
-            command("setblock 243 -58 200 air");
-            command("setblock 241 -58 200 create:creative_motor[facing=east]");
-        }, 140);
-        step("M5 observe", () -> {
-            observeMoved("M5 retracted, against the controller again (STRICT)", true);
-            command("setblock 241 -58 200 air");
-            run(() -> CSConfig.MODE.set(CSConfig.Mode.ASSIST));
-            // Linked again by hand, as the Linking Tool would: ASSIST must keep it linked through both moves.
-            run(() -> ((StorageControllerTile<?>) level().getBlockEntity(c8)).addConnectedDrawers(
-                    com.buuz135.functionalstorage.item.LinkingToolItem.ActionMode.ADD, mDrawer));
-        }, 5);
-        step("M6 ASSIST: extend", () -> command("setblock 243 -58 200 create:creative_motor[facing=west]"), 120);
-        step("M6 observe, then retract", () -> {
-            observeMoved("M6 extended, two blocks from the controller (ASSIST)", true);
-            expect("M6 ASSIST: the linked drawer pushed two blocks away stays linked", mDrawer.above(2), c8, "linked");
-            command("setblock 243 -58 200 air");
-            command("setblock 241 -58 200 create:creative_motor[facing=east]");
-        }, 140);
-        step("M7 observe", () -> {
-            observeMoved("M7 retracted, against the controller again (ASSIST)", true);
-            expect("M7 ASSIST: back against the controller, still linked", mDrawer, c8, "linked");
-            shot("M7_create_moved_addon_drawer");
-            give(SLOT_PLANKS, new ItemStack(Items.OAK_PLANKS, 64));
-            command("setblock 241 -58 200 air");
-            run(() -> CSConfig.MODE.set(CSConfig.Mode.STRICT));
-        }, 130);
+        // Immaterial Drawers (I) and Create (K, M) are on the 1.21.1 branch: neither exists for 26.1.
 
         // Trims
         step("T1 items in the hotbar", () -> {
@@ -450,7 +331,7 @@ final class ClientScenario {
         }, 5);
         step("C1 check before leaving", () -> IntStream.rangeClosed(206, 211).forEach(x ->
                 expect("C1 chain drawer x=" + x + " is linked", new BlockPos(x, Y, C4.getZ()), C4, "linked")), 1);
-        step("C1 go 3000 blocks away", () -> run(() -> player().teleportTo(level(), 3000.5, -59, 3000.5, 0, 0)), 400);
+        step("C1 go 3000 blocks away", () -> run(() -> player().teleportTo(level(), 3000.5, -59, 3000.5, java.util.Set.of(), 0, 0, true)), 400);
         step("C1 come back", () -> look(C4.offset(3, 0, 0)), 100);
         step("C1 check after coming back", () -> IntStream.rangeClosed(206, 211).forEach(x ->
                 expect("C1 after the chunks unloaded and came back, chain drawer x=" + x + " is still linked", new BlockPos(x, Y, C4.getZ()), C4, "linked")), 1);
@@ -458,7 +339,7 @@ final class ClientScenario {
         // FS #314: every link sends the controller's whole list to the client, which rebuilds the
         // network's shape. A 306-drawer wall placed one drawer per tick, against the same wall in
         // planks: client tick gaps measure the stutter.
-        step("W (move)", () -> run(() -> player().teleportTo(level(), 214.5, -55, 224.5, 0, 10)), 30);
+        step("W (move)", () -> run(() -> player().teleportTo(level(), 214.5, -55, 224.5, java.util.Set.of(), 0, 10, true)), 30);
         step("W0 controller", () -> command("setblock 214 -60 229 functionalstorage:storage_controller"), 5);
         wall("W1 planks", Items.OAK_PLANKS, 234);
         wall("W2 drawers", FunctionalStorage.DRAWER_TYPES.get(FunctionalStorage.DrawerType.X_1).get(0).getBlock().asItem(), 230);
@@ -534,65 +415,6 @@ final class ClientScenario {
         lastTickNanos = now;
     }
 
-    /** The Create contraption's drawer: where it is, whether linked, how many there are, and where the diamonds are. */
-    private void observe(String when) {
-        BlockPos controller = new BlockPos(231, -57, 200);
-        String state = onServer(() -> {
-            StringBuilder out = new StringBuilder();
-            int drawers = 0;
-            int stored = 0;
-            for (int y = -60; y <= -48; y++) {
-                BlockPos pos = new BlockPos(230, y, 200);
-                if (level().getBlockEntity(pos) instanceof com.buuz135.functionalstorage.block.tile.ItemControllableDrawerTile<?> drawer
-                        && !(drawer instanceof StorageControllerTile<?>)) {
-                    drawers++;
-                    stored += drawer.getStorage().getStackInSlot(0).is(Items.DIAMOND) ? drawer.getStorage().getStackInSlot(0).getCount() : 0;
-                    out.append("drawer at y=").append(y).append(" ").append(linkState(pos, controller)).append("; ");
-                }
-            }
-            int dropped = level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                    new net.minecraft.world.phys.AABB(new BlockPos(226, -61, 196)).inflate(8)).stream()
-                    .filter(e -> e.getItem().is(Items.DIAMOND)).mapToInt(e -> e.getItem().getCount()).sum();
-            return out + "drawers=" + drawers + ", diamonds stored=" + stored + ", diamonds dropped=" + dropped
-                    + " | piston: " + level().getBlockState(new BlockPos(230, -58, 200));
-        });
-        log("OBS | " + when + " | " + state);
-        if (when.startsWith("K5")) {
-            expectTrue(when + ": exactly one drawer and 32 diamonds in all, nothing duplicated or lost (" + state + ")",
-                    state.contains("drawers=1,") && state.contains("diamonds stored=32") && state.contains("diamonds dropped=0"));
-        }
-    }
-
-    /** The Immaterial Drawers contraption: where the energy drawer is, whether linked, how many, and its energy. */
-    private void observeMoved(String when, boolean check) {
-        BlockPos controller = new BlockPos(243, -57, 200);
-        Item energyDrawer = item("immaterialdrawers:energy_drawer");
-        String state = onServer(() -> {
-            StringBuilder out = new StringBuilder();
-            int drawers = 0;
-            int energy = 0;
-            for (int y = -60; y <= -48; y++) {
-                BlockPos pos = new BlockPos(242, y, 200);
-                if (level().getBlockState(pos).is(net.minecraft.world.level.block.Block.byItem(energyDrawer))) {
-                    drawers++;
-                    var storage = level().getCapability(net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, pos, null);
-                    energy += storage == null ? 0 : storage.getEnergyStored();
-                    out.append("drawer at y=").append(y).append(" ").append(linkState(pos, controller)).append("; ");
-                }
-            }
-            int dropped = level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                    new net.minecraft.world.phys.AABB(new BlockPos(242, -58, 200)).inflate(8)).stream()
-                    .filter(e -> e.getItem().is(energyDrawer)).mapToInt(e -> e.getItem().getCount()).sum();
-            return out + "drawers=" + drawers + ", energy=" + energy + ", drawer items dropped=" + dropped
-                    + " | piston: " + level().getBlockState(new BlockPos(242, -58, 200));
-        });
-        log("OBS | " + when + " | " + state);
-        if (check) {
-            expectTrue(when + ": one energy drawer, 10000 FE, nothing duplicated or lost (" + state + ")",
-                    state.contains("drawers=1,") && state.contains("energy=10000") && state.contains("dropped=0"));
-        }
-    }
-
     private static ItemStack areaTool() {
         ItemStack tool = new ItemStack(FunctionalStorage.LINKING_TOOL.get());
         tool.set(FSAttachments.LINKING_MODE.get(), com.buuz135.functionalstorage.item.LinkingToolItem.LinkingMode.MULTIPLE);
@@ -631,9 +453,9 @@ final class ClientScenario {
         }
         report.close();
         if (mc.level != null) {
-            mc.level.disconnect();
+            mc.level.disconnect(net.minecraft.network.chat.Component.empty());
         }
-        mc.disconnect();
+        mc.disconnectWithSavingScreen();
         mc.stop();
     }
 
@@ -649,12 +471,12 @@ final class ClientScenario {
 
     /** Stands the player 3 blocks north of {@code target}, facing it. */
     private void look(BlockPos target) {
-        run(() -> player().teleportTo(level(), target.getX() + 0.5, Y, target.getZ() - 2.5, 0, 35));
+        run(() -> player().teleportTo(level(), target.getX() + 0.5, Y, target.getZ() - 2.5, java.util.Set.of(), 0, 35, true));
     }
 
     /** Closer and higher, for a screenshot of a row of blocks. */
     private void closeUp(BlockPos target) {
-        run(() -> player().teleportTo(level(), target.getX() + 0.5, Y + 0.5, target.getZ() - 1.8, 0, 40));
+        run(() -> player().teleportTo(level(), target.getX() + 0.5, Y + 0.5, target.getZ() - 1.8, java.util.Set.of(), 0, 40, true));
     }
 
     private void give(int slot, ItemStack stack) {
@@ -662,7 +484,7 @@ final class ClientScenario {
     }
 
     private void selectSlot(int slot) {
-        mc.player.getInventory().selected = slot;
+        mc.player.getInventory().setSelectedSlot(slot);
     }
 
     /** What a right click on the top of the floor block under {@code target} does: places there. */
@@ -683,13 +505,13 @@ final class ClientScenario {
 
     private void shot(String name) {
         String file = String.format("scenario_%02d_%s.png", ++shots, name);
-        Screenshot.grab(mc.gameDirectory, file, mc.getMainRenderTarget(), message -> { });
+        Screenshot.grab(mc.gameDirectory, file, mc.getMainRenderTarget(), 1, message -> { });
         log("SHOT | " + file);
     }
 
     private void command(String command) {
         run(() -> mc.getSingleplayerServer().getCommands()
-                .performPrefixedCommand(player().createCommandSourceStack().withPermission(4).withSuppressedOutput(), command));
+                .performPrefixedCommand(player().createCommandSourceStack().withPermission(net.minecraft.server.permissions.PermissionSet.ALL_PERMISSIONS).withSuppressedOutput(), command));
     }
 
     // --- Checks --------------------------------------------------------------------------------
@@ -743,7 +565,7 @@ final class ClientScenario {
 
     private boolean hasModRecipes() {
         return mc.getSingleplayerServer().getRecipeManager().getRecipes().stream()
-                .anyMatch(recipe -> recipe.id().getNamespace().equals("contiguousstorage"));
+                .anyMatch(recipe -> recipe.id().identifier().getNamespace().equals("contiguousstorage"));
     }
 
     private boolean inCreativeTabs(String id) {
@@ -769,7 +591,7 @@ final class ClientScenario {
     }
 
     private static Item item(String id) {
-        return BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
+        return BuiltInRegistries.ITEM.getValue(Identifier.parse(id));
     }
 
     // --- Server access -------------------------------------------------------------------------

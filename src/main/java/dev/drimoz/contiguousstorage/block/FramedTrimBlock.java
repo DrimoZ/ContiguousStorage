@@ -2,6 +2,7 @@ package dev.drimoz.contiguousstorage.block;
 
 import com.buuz135.functionalstorage.block.FramedBlock;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.EntityBlock;
@@ -27,8 +28,8 @@ public class FramedTrimBlock extends TrimBlock implements EntityBlock, FramedBlo
 
     /** Pick-block keeps the look. */
     @Override
-    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
-        ItemStack stack = super.getCloneItemStack(level, pos, state);
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state, boolean includeData, Player player) {
+        ItemStack stack = super.getCloneItemStack(level, pos, state, includeData, player);
         if (level.getBlockEntity(pos) instanceof FramedTrimTile tile) {
             stack.applyComponents(tile.collectComponents());
         }

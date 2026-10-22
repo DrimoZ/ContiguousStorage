@@ -17,6 +17,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
@@ -59,7 +60,7 @@ public final class CSEvents {
      * break another mod cancels afterwards only costs a validation that finds nothing.
      */
     @SubscribeEvent
-    public static void onBreak(BlockEvent.BreakEvent event) {
+    public static void onBreak(BreakBlockEvent event) {
         if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
             Networks.broken(level, event.getPos(), event.getPlayer());
         }
@@ -89,7 +90,7 @@ public final class CSEvents {
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal(ContiguousStorage.MOD_ID)
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.literal("dryrun").executes(context -> {
                     Networks.DryRun result = Networks.dryRun(context.getSource().getLevel());
                     context.getSource().sendSuccess(() -> Component.translatableWithFallback(
