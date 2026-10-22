@@ -97,8 +97,9 @@ unlink. It works in any mode and changes nothing. It returns the drawer count, s
 - **Only players link by placement.** A drawer put back by a Create contraption, a deployer or any
   other machine is not linked when it lands against a network. Link it with the Linking Tool, or
   break it and place it again.
-- **Create.** Create cannot move Functional Storage's own drawers or controller: Functional Storage
-  forbids it.
+- **Create.** On 1.20.1, Create moves Functional Storage's drawers, and nothing is duplicated or lost.
+  In `STRICT`, a drawer moved away from its network is unlinked, and it is not linked again when
+  brought back, as above.
 - **Big networks are slow in Functional Storage itself.** This mod keeps an index of every network,
   so its own work stays small:
   - placing a drawer costs about what Functional Storage's own linking costs;

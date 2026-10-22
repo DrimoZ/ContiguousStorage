@@ -213,6 +213,32 @@ scénario tout seul dans un vrai client, sur le monde `run/saves/scenario` (mond
   - **le trim encadré habillé s'affiche avec son habillage en main et dans la barre d'inventaire.**
     La limite prévue par la session des trims ne se produit pas.
 
+### Résultats du 22 octobre 2026 — 1.20.1 (branche `1.20.1`, Forge 47.4.0, Create 6.0.8)
+
+Monde plat neuf, dans `run-1.20.1/saves/scenario`. Les étapes I et M ne sont pas jouées :
+Immaterial Drawers n'existe pas en 1.20.1.
+
+- **Premier passage : phase 1 à 55 réussis, 1 échoué. Mais les trims s'affichaient en modèle
+  manquant, avec des noms non traduits.** Le pack client généré n'était pas chargé. Il lisait
+  `trimsEnabled` à son ouverture, au démarrage du client, avant que Forge 1.20.1 ait chargé la
+  config commune. Le pack client ne lit plus la config, qui ne concerne que les recettes. Aucun game
+  test ne pouvait le voir : ils lisent le contenu du pack sans passer par son enregistrement.
+- **Second passage, monde neuf : phase 1 = 57 réussis, 0 échoué ; phase 2 = 13 réussis, 0 échoué.**
+  Le monde se recharge sans geler. La chaîne à cheval sur une bordure de chunk (C1, P4) tient.
+- **Create déplace les tiroirs de FS en 1.20.1** (en 1.21.1, FS l'interdit). Le tiroir monte de 2
+  blocs avec ses 32 diamants, sans duplication ni perte. Juste après le déplacement, il est à moitié
+  lié : il garde son `controllerPos`, mais il n'est plus dans la liste. En STRICT, le filet le délie
+  ensuite (K6, ajouté pour ce passage).
+- **Onglets créatifs (T6) :** en 1.20.1, `/reload` ne reconstruit pas les onglets du client, qui ne
+  sont rafraîchis qu'à la prochaine connexion. Le pilote force ce rafraîchissement, comme le
+  ferait une reconnexion. Avec `trimsEnabled = false`, les trims quittent donc les onglets à la
+  prochaine connexion, pas tout de suite.
+- **W (gel #314) :** l'écart maximal entre deux ticks du client est de 65 ms pour les deux murs.
+- **Captures** (`run-1.20.1/screenshots/scenario_*.png`) : les trims chêne et sapin ont leur bûche
+  en cadre et leurs planches au centre, et leurs noms sont traduits. Le trim encadré nu montre le
+  damier de FS. Le trim encadré habillé (diamant et or) est correct posé, en main et dans la barre,
+  et il reste identique après le rechargement.
+
 ### Résultats du 21 octobre 2026, scénario étendu (Z, I, K, M, W), Create 6.0.10 et Immaterial Drawers 0.2.1
 
 - **Phase 1 : 67 réussis, 0 échoué. Phase 2 : 13 réussis, 0 échoué.**

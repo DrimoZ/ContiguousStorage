@@ -16,6 +16,9 @@ The same mod as 0.1.0+1.21.1, ported to Minecraft 1.20.1 and Forge.
 
 ### Notes
 - Not tested with Immaterial Drawers, which has no 1.20.1 version.
+- Create moves Functional Storage's drawers on 1.20.1, without duplication. In `STRICT` a moved
+  drawer is unlinked once away from its network.
+- With `trimsEnabled = false`, the trims leave the creative tabs at the next join, not on `/reload`.
 
 ## 0.1.0+1.21.1 — 2026-10-22
 

@@ -297,9 +297,18 @@ final class ClientScenario {
         step("K4 motor on", () -> command("setblock 231 -58 200 create:creative_motor[facing=west]"), 100);
         step("K5 observe", () -> {
             observe("K5 five seconds after the motor");
-            shot("K5_create_piston_refuses_fs_drawer");
+            shot("K5_create_piston_and_fs_drawer");
             command("setblock 231 -58 200 air");
-        }, 2);
+        }, 200);
+        // On 1.20.1 Create does move FS drawers: two blocks up, it no longer touches the controller, and
+        // STRICT must unlink it - right away it is half linked (controllerPos kept, out of the list).
+        step("K6 check", () -> {
+            if (onServer(() -> level().getBlockEntity(moved.above(2)) instanceof ControllableDrawerTile<?>)) {
+                expect("K6 STRICT: the drawer Create moved away from the controller is unlinked", moved.above(2), c5, "free");
+            } else {
+                log("OBS | K6 the drawer did not move: Create refused it");
+            }
+        }, 1);
 
         // Trims
         step("T1 items in the hotbar", () -> {
@@ -641,6 +650,9 @@ final class ClientScenario {
     }
 
     private boolean inCreativeTabs(String id) {
+        // 1.20.1 rebuilds the tabs only when these parameters change, which /reload does not do: the tabs
+        // refresh at the next join. Flip one, as joining again would.
+        CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), false, mc.level.registryAccess());
         CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), true, mc.level.registryAccess());
         Item item = item(id);
         for (CreativeModeTab tab : BuiltInRegistries.CREATIVE_MODE_TAB) {

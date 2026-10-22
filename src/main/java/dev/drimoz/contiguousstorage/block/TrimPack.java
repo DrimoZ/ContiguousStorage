@@ -59,7 +59,10 @@ public final class TrimPack implements PackResources {
     public static void addPacks(AddPackFindersEvent event) {
         PackType type = event.getPackType();
         Pack pack = Pack.readMetaAndCreate(ID, Component.literal("Contiguous Storage trims"), true,
-                id -> new TrimPack(id, type, contents(type, CSConfig.TRIMS_ENABLED.get())), type, Pack.Position.TOP, PackSource.BUILT_IN);
+                // The client pack opens at startup, before Forge 1.20.1 has loaded the common config - and it does
+                // not depend on it: only the recipes do.
+                id -> new TrimPack(id, type, contents(type, type == PackType.CLIENT_RESOURCES || CSConfig.TRIMS_ENABLED.get())),
+                type, Pack.Position.TOP, PackSource.BUILT_IN);
         if (pack != null) {
             event.addRepositorySource(consumer -> consumer.accept(pack));
         }
