@@ -3,7 +3,7 @@
 **What this file is:** what changed in each release, newest first. **What it is not:** the plan
 (`ROADMAP.md`) or the full feature list (`README.md`).
 
-## 0.1.0+1.21.1 — unreleased
+## 0.1.0+1.21.1 — 2026-10-22
 
 ### Added
 - Drawers link to a Storage Controller by touching it, directly or through other drawers, trims and
