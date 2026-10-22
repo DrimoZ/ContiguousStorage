@@ -611,7 +611,7 @@ Chaque fichier a un seul métier et l'annonce en ouverture, y compris ce qu'il n
 
 | Cible | Ce qui change | État |
 |---|---|---|
-| 1.20.1 (Forge 47, FS 1.20.1-1.2.14) | Forge, pas NeoForge. Événements équivalents à retrouver (`BlockEvent.NeighborNotifyEvent` existe sur Forge). | **[à vérifier]** que `addConnectedDrawers`, `controllerPos` et l'auto-réparation au chargement existent sous cette forme dans FS 1.2.14. |
+| 1.20.1 (Forge 47, FS 1.20.1-1.2.14) | Forge, pas NeoForge. Java 17. | **Fait** le 22 octobre 2026, branche `1.20.1` (voir plus bas). |
 | 26.1 (NeoForge 26.1.2, FS 26.1-1.6.4) | Java 25. | **Fait** le 22 octobre 2026, branche `26.1` (voir plus bas). |
 
 Un mod sans bloc ni asset se porte vite, **à condition** que l'API de linking de FS soit la même. C'est
@@ -665,6 +665,36 @@ et Immaterial Drawers n'a pas de build 26.1. Un client démarre sans erreur de r
   de la version), et les étapes Create et Immaterial Drawers du scénario client.
 - **[vérifié] en jeu le 22 octobre 2026 :** scénario complet, phase 1 à 54/54 et phase 2 à 13/13, rendu des
   trims compris (`MANUAL_TESTS.md`). Le pilote est créé au `FMLClientSetupEvent`, pas dans le constructeur.
+
+**Port 1.20.1 (Forge) — fait le 22 octobre 2026**, branche `1.20.1`, partie de `1.21.1` : NeoForge 1.21.1
+est bien plus proche de Forge 1.20.1 que de 26.1. **[vérifié]** : les 36 game tests requis passent,
+les deux du spike compris. Le scénario en jeu passe, phase 1 à 57/57 et phase 2 à 13/13. Le jar est
+réobfusqué en noms SRG.
+- **Build :** ModDevGradle `legacyforge` `2.0.148`, Forge `47.4.0`, Parchment `2023.09.03`, Java 17. Les
+  dépendances passent par `modImplementation` pour être remappées. Les runs vont dans `run-1.20.1/`.
+- **Pas de gel au chargement** sur FS 1.2.14, ni en game test ni au rechargement du monde. Pas de
+  mixin.
+- **Écarts de FS 1.20.1 :**
+  - La portée vaut `DRAWER_CONTROLLER_LINKING_RANGE + multiplicateur`, et le multiplicateur ne compte
+    pas tant qu'il vaut 1. `NetworkWalker.range` suit cette formule.
+  - Le Linking Tool garde son contrôleur en NBT (`Controller`, X/Y/Z).
+  - La recette encadrée de FS n'accepte que ses propres blocs. Le trim encadré a donc sa recette
+    (`FramedTrimRecipe`). Son apparence passe par le tag `Style`, comme les tiroirs encadrés de FS,
+    et elle est dessinée par le loader `framedblock`.
+  - **Create déplace les tiroirs de FS**, sans duplication. En STRICT, le filet délie un tiroir
+    déplacé loin de son réseau.
+- **Pièges :**
+  - **La config commune n'est pas chargée** quand le pack client s'ouvre au démarrage. La lire fait
+    tomber le pack, et les trims s'affichent en modèle manquant. Aucun game test ne le voit.
+  - Les dossiers de données sont au pluriel (`structures`, `tags/blocks`, `loot_tables`,
+    `recipes`). Le résultat d'une recette s'écrit `"item"`. Il faut un `pack.mcmeta`.
+  - `/reload` ne reconstruit pas les onglets créatifs du client, seulement la connexion suivante.
+  - Le `GameTestHelper` de 1.20.1 n'a ni `assertValueEqual` ni `getBlockEntity` typé. Un bloc y est
+    dans la bordure du monde dès qu'une partie l'est.
+  - Choisir une amélioration de portée **`MAX_STORAGE`** donne une portée de 536 millions de blocs,
+    et la recherche des candidats ne finit plus. Les tests prennent une amélioration en netherite.
+- **Retiré de la branche :** le mixin, `LogoRender`, `Showcase`, et les étapes Immaterial Drawers du
+  scénario.
 
 ---
 
