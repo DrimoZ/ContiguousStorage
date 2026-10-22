@@ -3,6 +3,20 @@
 **What this file is:** what changed in each release, newest first. **What it is not:** the plan
 (`ROADMAP.md`) or the full feature list (`README.md`).
 
+## 0.1.0+1.20.1 — unreleased
+
+The same mod as 0.1.0+1.21.1, ported to Minecraft 1.20.1 and Forge.
+
+### Changed
+- Built for Forge 47 and Functional Storage 1.20.1-1.2.14 or newer, on Java 17.
+- The framed trim is dressed by a recipe of its own (frame block, core block, framed trim), since
+  Functional Storage 1.20.1's framed recipe takes only its own blocks. Its look is kept in the same
+  `Style` tag as Functional Storage's framed drawers.
+- No backport of the 1.5.7 load freeze fix: Functional Storage 1.20.1 loads differently.
+
+### Notes
+- Not tested with Immaterial Drawers, which has no 1.20.1 version.
+
 ## 0.1.0+1.21.1 — 2026-10-22
 
 ### Added

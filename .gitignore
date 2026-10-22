@@ -5,6 +5,8 @@ repo/
 
 # Dev runtime
 run/
+run-1.20.1/
+run-26.1/
 run-gametest/
 run-nomod/
 

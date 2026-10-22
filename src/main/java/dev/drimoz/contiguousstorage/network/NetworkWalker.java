@@ -1,6 +1,7 @@
 package dev.drimoz.contiguousstorage.network;
 
 import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
+import com.buuz135.functionalstorage.block.config.FunctionalStorageConfig;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
@@ -39,7 +40,7 @@ public final class NetworkWalker {
 
     /** Blocks that carry a network without being linked to it. Ships Storage Drawers' trims; packs add to it. */
     public static final TagKey<Block> CONDUCTORS =
-            TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(ContiguousStorage.MOD_ID, "conductors"));
+            TagKey.create(Registries.BLOCK, new ResourceLocation(ContiguousStorage.MOD_ID, "conductors"));
 
     static final Direction[] DIRECTIONS = Direction.values();
 
@@ -119,10 +120,12 @@ public final class NetworkWalker {
 
     /**
      * The same area Functional Storage accepts in {@code addConnectedDrawers} and keeps in
-     * {@code ConnectedDrawers.rebuild} - read from the 1.5.7 bytecode.
+     * {@code ConnectedDrawers.rebuild} - read from Functional Storage 1.20.1-1.2.14: the configured
+     * linking range, plus the upgrades' multiplier, which counts for nothing while it is 1.
      */
     public static AABB range(StorageControllerTile<?> controller) {
-        return new AABB(controller.getBlockPos()).inflate(controller.getStorageMultiplier());
+        int extra = controller.getStorageMultiplier();
+        return new AABB(controller.getBlockPos()).inflate(FunctionalStorageConfig.DRAWER_CONTROLLER_LINKING_RANGE + (extra == 1 ? 0 : extra));
     }
 
     /** Chunk access for the server thread that never blocks: null for a chunk that is not ready. */

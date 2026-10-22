@@ -10,9 +10,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackResources;
-import net.minecraft.server.packs.PackSelectionConfig;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.metadata.MetadataSectionSerializer;
 import net.minecraft.server.packs.metadata.pack.PackMetadataSection;
@@ -20,7 +18,7 @@ import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.event.AddPackFindersEvent;
+import net.minecraftforge.event.AddPackFindersEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
@@ -47,12 +45,12 @@ public final class TrimPack implements PackResources {
 
     private static final String ID = ContiguousStorage.MOD_ID + "_trims";
 
-    private final PackLocationInfo location;
+    private final String id;
     private final PackType type;
     private final Map<ResourceLocation, byte[]> files;
 
-    private TrimPack(PackLocationInfo location, PackType type, Map<ResourceLocation, byte[]> files) {
-        this.location = location;
+    private TrimPack(String id, PackType type, Map<ResourceLocation, byte[]> files) {
+        this.id = id;
         this.type = type;
         this.files = files;
     }
@@ -60,19 +58,8 @@ public final class TrimPack implements PackResources {
     /** Adds the pack, always on and on top, to both the client resources and the server data. */
     public static void addPacks(AddPackFindersEvent event) {
         PackType type = event.getPackType();
-        PackLocationInfo info = new PackLocationInfo(ID, Component.literal("Contiguous Storage trims"), PackSource.BUILT_IN, Optional.empty());
-        Pack.ResourcesSupplier resources = new Pack.ResourcesSupplier() {
-            @Override
-            public PackResources openPrimary(PackLocationInfo location) {
-                return new TrimPack(location, type, contents(type, CSConfig.TRIMS_ENABLED.get()));
-            }
-
-            @Override
-            public PackResources openFull(PackLocationInfo location, Pack.Metadata metadata) {
-                return openPrimary(location);
-            }
-        };
-        Pack pack = Pack.readMetaAndCreate(info, resources, type, new PackSelectionConfig(true, Pack.Position.TOP, false));
+        Pack pack = Pack.readMetaAndCreate(ID, Component.literal("Contiguous Storage trims"), true,
+                id -> new TrimPack(id, type, contents(type, CSConfig.TRIMS_ENABLED.get())), type, Pack.Position.TOP, PackSource.BUILT_IN);
         if (pack != null) {
             event.addRepositorySource(consumer -> consumer.accept(pack));
         }
@@ -136,20 +123,25 @@ public final class TrimPack implements PackResources {
             String name = name(trim);
             String id = CSBlocks.id(name).toString();
             axe.add(id);
-            out.put(CSBlocks.id("loot_table/blocks/" + name + ".json"), lootTable(id, trim == CSBlocks.FRAMED_TRIM));
+            out.put(CSBlocks.id("loot_tables/blocks/" + name + ".json"), lootTable(id, trim == CSBlocks.FRAMED_TRIM));
         }
         JsonObject tag = new JsonObject();
         tag.add("values", axe);
-        out.put(ResourceLocation.withDefaultNamespace("tags/block/mineable/axe.json"), tag);
+        out.put(new ResourceLocation("tags/blocks/mineable/axe.json"), tag);
         if (!enabled) {
             return;
         }
-        CSBlocks.WOOD_TRIMS.forEach((trim, wood) -> out.put(CSBlocks.id("recipe/" + name(trim) + ".json"),
+        CSBlocks.WOOD_TRIMS.forEach((trim, wood) -> out.put(CSBlocks.id("recipes/" + name(trim) + ".json"),
                 ringRecipe(item(BuiltInRegistries.BLOCK.getKey(wood.getPlanks()).toString()), CSBlocks.id(name(trim)).toString())));
         if (CSBlocks.FRAMED_TRIM != null) {
             JsonObject nugget = new JsonObject();
             nugget.addProperty("tag", "c:nuggets/iron");
-            out.put(CSBlocks.id("recipe/framed_trim.json"), ringRecipe(nugget, CSBlocks.id("framed_trim").toString()));
+            out.put(CSBlocks.id("recipes/framed_trim.json"), ringRecipe(nugget, CSBlocks.id("framed_trim").toString()));
+            // Dressing it: Functional Storage 1.20.1's own framed recipe only takes its own blocks.
+            JsonObject dressing = new JsonObject();
+            dressing.addProperty("type", FramedTrimRecipe.ID.toString());
+            dressing.addProperty("category", "misc");
+            out.put(CSBlocks.id("recipes/framed_trim_dressing.json"), dressing);
         }
     }
 
@@ -168,7 +160,7 @@ public final class TrimPack implements PackResources {
         key.add("C", centre);
         recipe.add("key", key);
         JsonObject output = new JsonObject();
-        output.addProperty("id", result);
+        output.addProperty("item", result);
         output.addProperty("count", 4);
         recipe.add("result", output);
         return recipe;
@@ -180,12 +172,14 @@ public final class TrimPack implements PackResources {
         entry.addProperty("type", "minecraft:item");
         entry.addProperty("name", id);
         if (framed) {
+            JsonObject op = new JsonObject();
+            op.addProperty("source", FramedTrimTile.STYLE);
+            op.addProperty("target", FramedTrimTile.STYLE);
+            op.addProperty("op", "replace");
             JsonObject copy = new JsonObject();
-            copy.addProperty("function", "minecraft:copy_components");
+            copy.addProperty("function", "minecraft:copy_nbt");
             copy.addProperty("source", "block_entity");
-            JsonArray include = new JsonArray();
-            include.add("functionalstorage:style");
-            copy.add("include", include);
+            copy.add("ops", array(op));
             entry.add("functions", array(copy));
         }
         JsonObject survives = new JsonObject();
@@ -356,12 +350,12 @@ public final class TrimPack implements PackResources {
             return null;
         }
         return (T) new PackMetadataSection(Component.literal("Contiguous Storage trims, generated"),
-                SharedConstants.getCurrentVersion().getPackVersion(type), Optional.empty());
+                SharedConstants.getCurrentVersion().getPackVersion(type));
     }
 
     @Override
-    public PackLocationInfo location() {
-        return location;
+    public String packId() {
+        return id;
     }
 
     @Override

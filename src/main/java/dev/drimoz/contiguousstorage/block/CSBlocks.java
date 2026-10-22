@@ -15,8 +15,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.registries.RegisterEvent;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.registries.RegisterEvent;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ public final class CSBlocks {
     }
 
     public static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(ContiguousStorage.MOD_ID, path);
+        return new ResourceLocation(ContiguousStorage.MOD_ID, path);
     }
 
     public static void register(RegisterEvent event) {
@@ -64,14 +64,14 @@ public final class CSBlocks {
                     continue;
                 }
                 try {
-                    TrimBlock trim = new TrimBlock(BlockBehaviour.Properties.ofFullCopy(wood.getPlanks()));
+                    TrimBlock trim = new TrimBlock(BlockBehaviour.Properties.copy(wood.getPlanks()));
                     helper.register(id(wood.getName() + "_trim"), trim);
                     WOOD_TRIMS.put(trim, wood);
                 } catch (RuntimeException e) {
                     LOGGER.warn("No trim for Functional Storage wood {}: {}", wood.getName(), e.toString());
                 }
             }
-            FRAMED_TRIM = new FramedTrimBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS));
+            FRAMED_TRIM = new FramedTrimBlock(BlockBehaviour.Properties.copy(Blocks.OAK_PLANKS));
             helper.register(id("framed_trim"), FRAMED_TRIM);
         });
         event.register(Registries.ITEM, helper ->
@@ -80,6 +80,7 @@ public final class CSBlocks {
             FRAMED_TRIM_TILE = BlockEntityType.Builder.of(FramedTrimTile::new, FRAMED_TRIM).build(null);
             helper.register(id("framed_trim"), FRAMED_TRIM_TILE);
         });
+        event.register(Registries.RECIPE_SERIALIZER, helper -> helper.register(FramedTrimRecipe.ID, FramedTrimRecipe.SERIALIZER));
     }
 
     /** In Functional Storage's tab and in Building Blocks - unless trims are turned off. */

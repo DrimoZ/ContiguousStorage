@@ -2,7 +2,7 @@
 # tags merge with the mod's own instead of shadowing them (one pack per mod), and the driver that
 # plays the manual test scenario in a real client (./gradlew runClient -Pscenario).
 modLoader = "javafml"
-loaderVersion = "[4,)"
+loaderVersion = "[47,)"
 license = "MIT"
 
 [[mods]]

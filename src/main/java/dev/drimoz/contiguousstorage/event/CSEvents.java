@@ -1,27 +1,28 @@
 package dev.drimoz.contiguousstorage.event;
 
 import com.buuz135.functionalstorage.FunctionalStorage;
-import com.buuz135.functionalstorage.item.FSAttachments;
+import com.buuz135.functionalstorage.item.LinkingToolItem;
+import net.minecraft.nbt.CompoundTag;
 import dev.drimoz.contiguousstorage.CSConfig;
 import dev.drimoz.contiguousstorage.ContiguousStorage;
 import dev.drimoz.contiguousstorage.network.Networks;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.level.BlockEvent;
-import net.neoforged.neoforge.event.level.ChunkEvent;
-import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.ChunkEvent;
+import net.minecraftforge.event.TickEvent;
 
 /** Every listener of the mod, on the game bus (CLAUDE.md §5). */
-@EventBusSubscriber(modid = ContiguousStorage.MOD_ID)
+@Mod.EventBusSubscriber(modid = ContiguousStorage.MOD_ID)
 public final class CSEvents {
 
     private CSEvents() {
@@ -75,11 +76,21 @@ public final class CSEvents {
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (CSConfig.mode() == CSConfig.Mode.STRICT && event.getLevel() instanceof ServerLevel level) {
             ItemStack stack = event.getItemStack();
-            BlockPos controller = stack.is(FunctionalStorage.LINKING_TOOL.get()) ? stack.get(FSAttachments.CONTROLLER) : null;
+            BlockPos controller = stack.is(FunctionalStorage.LINKING_TOOL.get()) ? linkingToolController(stack) : null;
             if (controller != null) {
                 Networks.linkingToolUsed(level, controller, event.getEntity());
             }
         }
+    }
+
+    /** The controller the Linking Tool is bound to: on 1.20.1, X/Y/Z in its {@code Controller} tag. */
+    private static BlockPos linkingToolController(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(LinkingToolItem.NBT_CONTROLLER)) {
+            return null;
+        }
+        CompoundTag controller = tag.getCompound(LinkingToolItem.NBT_CONTROLLER);
+        return new BlockPos(controller.getInt("X"), controller.getInt("Y"), controller.getInt("Z"));
     }
 
     /**
@@ -102,8 +113,8 @@ public final class CSEvents {
     }
 
     @SubscribeEvent
-    public static void onLevelTick(LevelTickEvent.Post event) {
-        if (event.getLevel() instanceof ServerLevel level) {
+    public static void onLevelTick(TickEvent.LevelTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && event.level instanceof ServerLevel level) {
             CSConfig.Mode mode = CSConfig.mode();
             Networks.linkPlaced(level);
             Networks.processChanges(level, mode);

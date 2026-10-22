@@ -15,36 +15,31 @@ logoFile = "logo.png"
 description = '''${mod_description}'''
 
 [[dependencies.${mod_id}]]
-modId = "neoforge"
-type = "required"
-versionRange = "${neo_version_range}"
+modId = "forge"
+mandatory = true
+versionRange = "${forge_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.${mod_id}]]
 modId = "minecraft"
-type = "required"
+mandatory = true
 versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
 # The mod only ever talks to Functional Storage's linking API (addConnectedDrawers, controllerPos).
-# FS versions read "1.21.1-1.5.7": a bare [1.5.7,) would let any FS for 1.21.1 through.
+# FS versions read "1.20.1-1.2.14": a bare [1.2.14,) would let any FS for 1.20.1 through.
 [[dependencies.${mod_id}]]
 modId = "functionalstorage"
-type = "required"
-versionRange = "[1.21.1-1.5.7,)"
+mandatory = true
+versionRange = "[1.20.1-1.2.14,)"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.${mod_id}]]
 modId = "titanium"
-type = "required"
-versionRange = "[4.0.34,)"
+mandatory = true
+versionRange = "[3.8.35,)"
 ordering = "AFTER"
 side = "BOTH"
-
-# One backport of a Functional Storage fix, applied to FS 1.5.7 and older only - see
-# mixin/ControllableDrawerTileMixin and DESIGN.md §3.
-[[mixins]]
-config = "contiguousstorage.mixins.json"

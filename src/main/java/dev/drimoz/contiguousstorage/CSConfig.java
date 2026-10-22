@@ -1,6 +1,6 @@
 package dev.drimoz.contiguousstorage;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /** {@code contiguousstorage-common.toml}. A world setting, not a player one (CLAUDE.md §6). */
 public final class CSConfig {
@@ -14,13 +14,13 @@ public final class CSConfig {
         STRICT
     }
 
-    public static final ModConfigSpec SPEC;
-    public static final ModConfigSpec.EnumValue<Mode> MODE;
-    public static final ModConfigSpec.IntValue VALIDATION_INTERVAL_TICKS;
-    public static final ModConfigSpec.BooleanValue TRIMS_ENABLED;
+    public static final ForgeConfigSpec SPEC;
+    public static final ForgeConfigSpec.EnumValue<Mode> MODE;
+    public static final ForgeConfigSpec.IntValue VALIDATION_INTERVAL_TICKS;
+    public static final ForgeConfigSpec.BooleanValue TRIMS_ENABLED;
 
     static {
-        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         MODE = builder
                 .comment("OFF: Functional Storage as shipped.",
                         "ASSIST: a drawer placed against a controller, or against a drawer linked to one, is linked to it.",

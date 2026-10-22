@@ -1,16 +1,16 @@
 plugins {
     id 'java-library'
-    // Pinned to the version Functional Storage itself builds with.
-    id 'net.neoforged.moddev' version '2.0.75'
+    // ModDevGradle's Forge flavour: Forge 47 for 1.20.1, with the same layout as the NeoForge branches.
+    id 'net.neoforged.moddev.legacyforge' version '2.0.148'
 }
 
 version = "${mod_version}+${minecraft_version}"
 group = mod_group_id
 base { archivesName = mod_id }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-// src/gametest: a dev-only mod present in dev runs, never in the jar - see neoForge.mods. Its data
+// src/gametest: a dev-only mod present in dev runs, never in the jar - see legacyForge.mods. Its data
 // (test tags) and the in-game scenario driver (./gradlew runClient -Pscenario, MANUAL_TESTS.md).
 sourceSets { gametest {} }
 configurations { gametestImplementation.extendsFrom implementation }
@@ -22,8 +22,8 @@ configurations {
     nomodRuntimeOnly.extendsFrom runtimeOnly
 }
 
-neoForge {
-    version = project.neo_version
+legacyForge {
+    version = "${minecraft_version}-${forge_version}"
 
     parchment {
         minecraftVersion = project.parchment_minecraft_version
@@ -33,23 +33,14 @@ neoForge {
     runs {
         client {
             client()
-            gameDirectory = project.file('run')
-            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            // Its own folder: a world opened in another version cannot be opened in this one again.
+            gameDirectory = project.file('run-1.20.1')
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
             // -Pscenario: opens the world "scenario" and lets the dev-only driver play the manual
             // test scenario by itself (src/gametest, ClientScenario).
             if (project.hasProperty('scenario')) {
                 programArguments.addAll '--quickPlaySingleplayer', 'scenario'
                 systemProperty 'contiguousstorage.scenario', 'true'
-            }
-            // -Plogo: renders the logo from the real blocks into run/logo/logo.png (LogoRender).
-            if (project.hasProperty('logo')) {
-                programArguments.addAll '--quickPlaySingleplayer', 'scenario'
-                systemProperty 'contiguousstorage.logo', 'true'
-            }
-            // -Pshowcase: builds the store page's scenes and captures them into run/store-screenshots (Showcase).
-            if (project.hasProperty('showcase')) {
-                programArguments.addAll '--quickPlaySingleplayer', 'scenario', '--width', '1920', '--height', '1080'
-                systemProperty 'contiguousstorage.showcase', 'true'
             }
         }
         // A client with Functional Storage but not this mod, joining runServer: it must be turned
@@ -63,14 +54,14 @@ neoForge {
         }
         server {
             server()
-            gameDirectory = project.file('run')
+            gameDirectory = project.file('run-1.20.1')
             programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
         }
         // Runs every @GameTest headlessly and exits non-zero if any fails.
         gameTestServer {
             type = 'gameTestServer'
-            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
             gameDirectory = project.file('run-gametest')
         }
         configureEach {
@@ -83,8 +74,8 @@ neoForge {
             sourceSet(sourceSets.main)
         }
         // Dev runs only, never the jar: data the game tests need, such as copper in the conductor
-        // tag. A mod of its own (lowcodefml, no code) so its tag merges with the shipped one -
-        // two files at one path in a single mod would shadow each other instead.
+        // tag. A mod of its own so its tag merges with the shipped one - two files at one path in a
+        // single mod would shadow each other instead.
         contiguousstorage_testdata {
             sourceSet(sourceSets.gametest)
         }
@@ -108,33 +99,26 @@ repositories {
 }
 
 dependencies {
-    // Hard dependencies, never bundled.
-    implementation "com.hrznstudio:titanium:${titanium_version}"
-    implementation "maven.modrinth:functional-storage:${functionalstorage_version}"
+    // Hard dependencies, never bundled. mod*: remapped from Forge's production names to dev names.
+    modImplementation "com.hrznstudio:titanium:${titanium_version}"
+    modImplementation "maven.modrinth:functional-storage:${functionalstorage_version}"
 
-    runtimeOnly "maven.modrinth:jade:${jade_version}"
+    modRuntimeOnly "maven.modrinth:jade:${jade_version}"
     // Dev run only: the scenario moves a linked drawer with a Create contraption. -PnoCreate leaves it out.
     if (!project.hasProperty('noCreate')) {
-        runtimeOnly "maven.modrinth:create:${create_version}"
+        modRuntimeOnly "maven.modrinth:create:${create_version}"
     }
 
     gametestImplementation sourceSets.main.output
-
-    // Game test 10: an addon drawer conducts and links. Immaterial Drawers is built next door and
-    // not on a maven; without its jar the run still works and only that (non-required) test fails.
-    var immaterialDrawers = file("../ImmaterialDrawers/build/libs/immaterialdrawers-${immaterialdrawers_version}.jar")
-    if (immaterialDrawers.exists()) {
-        runtimeOnly files(immaterialDrawers)
-    }
 }
 
-// Expand gradle.properties into neoforge.mods.toml so versions live in one place.
+// Expand gradle.properties into mods.toml so versions live in one place.
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
-            neo_version_range      : neo_version_range,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
@@ -150,7 +134,7 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
 }
 
 sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+legacyForge.ideSyncTask generateModMetadata
 
 tasks.named('jar', Jar) {
     from(file('LICENSE')) { into 'META-INF' }
@@ -159,6 +143,6 @@ tasks.named('jar', Jar) {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 21
+    options.release = 17
     options.compilerArgs << '-Xlint:deprecation'
 }
